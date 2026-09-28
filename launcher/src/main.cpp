@@ -43,6 +43,46 @@ static void PrintVersion() {
     WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), version, (DWORD)wcslen(version), nullptr, nullptr);
 }
 
+// 检测是否运行在 Wine 环境下（包括 Winlator/CrossOver 等基于 Wine 的兼容层）
+// 通过检查 ntdll.dll 是否导出 wine_get_version 函数
+static bool IsRunningUnderWine() {
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll) return false;
+    return GetProcAddress(ntdll, "wine_get_version") != nullptr;
+}
+
+// 获取 Wine 版本字符串（如果在 Wine 下）
+static std::wstring GetWineVersion() {
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll) return L"";
+    FARPROC proc = GetProcAddress(ntdll, "wine_get_version");
+    if (!proc) return L"";
+    typedef const char* (*wine_get_version_t)(void);
+    const char* version = ((wine_get_version_t)proc)();
+    if (!version) return L"";
+    // UTF-8 转宽字符
+    int len = MultiByteToWideChar(CP_UTF8, 0, version, -1, nullptr, 0);
+    if (len <= 0) return L"";
+    std::wstring result(len, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, version, -1, &result[0], len);
+    return result;
+}
+
+// 获取 Windows 版本信息
+static std::wstring GetWindowsVersionString() {
+    OSVERSIONINFOEXW osvi = {};
+    osvi.dwOSVersionInfoSize = sizeof(osvi);
+    // GetVersionEx 在 Win10+ 上可能返回 6.2，需要用其他方式
+    // 但对于兼容性检测，主要版本号足够
+    if (GetVersionExW((LPOSVERSIONINFOW)&osvi)) {
+        wchar_t buf[64];
+        swprintf_s(buf, L"%lu.%lu (build %lu)",
+            osvi.dwMajorVersion, osvi.dwMinorVersion, osvi.dwBuildNumber);
+        return buf;
+    }
+    return L"未知";
+}
+
 // 智能模式：自动扫描当前目录，识别引擎，查找游戏 exe，生成配置
 // 返回 true 表示成功，config 已填充；false 表示失败
 static bool AutoDetectConfig(LauncherConfig& config, LogLevel log_level) {
@@ -223,6 +263,15 @@ int main(int argc, char* argv[]) {
     GE_LOG_INFO(L"GalEngineKit Launcher v0.1.0 启动");
     GE_LOG_INFO(L"配置文件: " + config_path);
     GE_LOG_INFO(L"日志级别: " + std::to_wstring((int)log_level));
+
+    // 环境检测
+    if (IsRunningUnderWine()) {
+        std::wstring wine_ver = GetWineVersion();
+        GE_LOG_INFO(L"运行环境: Wine " + wine_ver + L"（兼容层模式）");
+        GE_LOG_INFO(L"提示: 在 Wine/Winlator 下使用导入表注入，不钩 Wine 内置 DLL");
+    } else {
+        GE_LOG_INFO(L"运行环境: 原生 Windows " + GetWindowsVersionString());
+    }
 
     // ===== 配置加载 / 智能识别 =====
     config_file_exists = (GetFileAttributesW(config_path.c_str()) != INVALID_FILE_ATTRIBUTES);

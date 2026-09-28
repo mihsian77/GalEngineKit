@@ -2,7 +2,7 @@
 # 独立实现，MIT 许可
 
 cmake_minimum_required(VERSION 3.15)
-project(GalEngineKitLauncher VERSION 0.1.0 LANGUAGES CXX)
+project(GalEngineKitLauncher VERSION 0.1.0 LANGUAGES CXX RC)
 
 # C++ 标准
 set(CMAKE_CXX_STANDARD 17)
@@ -20,10 +20,16 @@ set(SOURCES
     src/patcher.cpp
     src/launcher.cpp
     src/engine_detector.cpp
+    resources/galenginekit.rc
 )
 
 # 头文件目录
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# RC 资源编译器包含路径（.rc 文件引用 icon.ico）
+if(MINGW)
+    set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}/resources")
+endif()
 
 # 可执行文件
 add_executable(GalEngineKitLauncher ${SOURCES})
