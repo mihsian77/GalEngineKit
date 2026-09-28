@@ -154,6 +154,7 @@ int main(int argc, char* argv[]) {
     bool dry_run = false;
     bool has_config = false;
     int exit_code = 0;
+    bool config_file_exists = false;  // 提前声明，避免 goto cleanup 跳过带初始化器的声明
     LauncherConfig config;   // 提前声明，避免 goto cleanup 跳过初始化
     ResultCode rc = ResultCode::Success;
     Logger& logger = Logger::Instance();  // 提前声明，避免 goto cleanup 跳过引用绑定
@@ -224,7 +225,7 @@ int main(int argc, char* argv[]) {
     GE_LOG_INFO(L"日志级别: " + std::to_wstring((int)log_level));
 
     // ===== 配置加载 / 智能识别 =====
-    bool config_file_exists = (GetFileAttributesW(config_path.c_str()) != INVALID_FILE_ATTRIBUTES);
+    config_file_exists = (GetFileAttributesW(config_path.c_str()) != INVALID_FILE_ATTRIBUTES);
 
     if (!config_file_exists && !has_config) {
         // === 智能模式：自动扫描目录，识别引擎，生成配置 ===
