@@ -1,0 +1,42 @@
+{
+  "engine_id": "yuris",
+  "name": "YU-RIS",
+  "aliases": ["yu-ris", "ユリス", "YU-RIS Engine", "Relirium"],
+  "detection_signatures": {
+    "module_markers": ["ysbin\\yscfg.ybn", "yu-ris1", "YSWBP.DLL", "YSPNG.DLL"],
+    "directory_structures": ["pac/*.ypf", "ysbin/", "ysbin/yscfg.ybn", "bn.ypf", "ysbin.ypf"],
+    "archive_formats": ["ypf (目录偏移 0x1F4)", "ybn (编译脚本/配置)", "ydg (Relirium 变体图集中间格式)"]
+  },
+  "text_rendering_path": "bitmap",
+  "font_strategy": {
+    "recommended_approach": "engine_hook",
+    "notes": "YU-RIS 不经过 GDI 实时创建字体，而是从 YPF 归档读取预渲染字体图集（WebP/PNG/YDG），因此 Wine 字体注册表替换完全无效。中文化需两条路径配合：(1) 运行时钩子拦截 YSWBP.DLL ordinal 3 / YSPNG.DLL ordinal 1-2 / Relirium QOI 解码入口，将中文字体栅格化为图集像素写回解码缓冲区；(2) 修改 SJIS_Rang_Table 范围表（0x9F 等经典边界）以容纳中文字符码位。字体页布局按代码页区分：CP932 为 45 页×8 样式×188 槽（WebP），GBK 为 127 页×2 样式×192 槽（WebP），Big5 为 89-90 页×160 槽（PNG），Relirium 变体为 46 页×8 样式（YDG）。部分游戏使用 Enigma Virtual Box 打包，需先解包。"
+  },
+  "hook_targets": [
+    {
+      "target_type": "engine_file_api",
+      "description": "YPF 资源解码入口：YSWBP.DLL ordinal 3（WebP）、YSPNG.DLL ordinal 1/2（PNG）、Relirium 主模块内 QOI 解码核心（YDG）；用于虚拟化字体图集像素",
+      "risk_level": "medium"
+    },
+    {
+      "target_type": "engine_cache",
+      "description": "字体图集缓存与已上传显存的纹理资源；配置变更时需清理图集缓存并发布 WM_FONTCHANGE 请求重绘",
+      "risk_level": "medium"
+    },
+    {
+      "target_type": "engine_runtime",
+      "description": "yscfg.ybn 配置读取与免封包开关；老版本默认免封包，新版本需开启 yscfg.ybn 的免封包读取位",
+      "risk_level": "low"
+    }
+  ],
+  "container_recommendations": {
+    "wine_version_hint": "Wine 7+",
+    "dxvk": true,
+    "single_threaded": false,
+    "font_registry_replacement": false,
+    "notes": "Wine 字体注册表对本引擎无效。中文化依赖运行时钩子替换预渲染图集。部分游戏用 Enigma Virtual Box 打包，需在容器外或容器内先解包。YU-RIS 使用 Direct3D 渲染，建议开启 DXVK。版本识别：主程序属性详细信息中版本号 0.2xx 为老版本，0.4xx/0.5xx 为新版本。"
+  },
+  "status": "verified",
+  "references": ["GARbro ArcYPF.cs（YPF 归档格式公开实现）", "YurisTools（Dir-A，YU-RIS 数据工具集）", "YU-RIS 汉化教程（Dir-A，引擎逆向方法论）", "SimpleFontHook YU-RIS 适配器（功能规格参考，未复制代码）"],
+  "last_updated": "2026-09-28"
+}
