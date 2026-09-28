@@ -1,0 +1,37 @@
+{
+  "engine_id": "artemis",
+  "name": "Artemis Engine",
+  "aliases": ["iMel", "Mikage", "Artemis"],
+  "detection_signatures": {
+    "module_markers": [],
+    "directory_structures": ["*.pfs", "system/table/list_windows*.tbl"],
+    "archive_formats": ["pfs (pf2/pf6/pf8)"]
+  },
+  "text_rendering_path": "freetype",
+  "font_strategy": {
+    "recommended_approach": "file_replacement",
+    "notes": "Artemis 是 Lua 引擎，不经过 GDI/DirectWrite，使用自带 FreeType 直接从 PFS 归档加载字体。Wine 字体注册表替换无效，需替换归档内字体文件并修改 list_windows*.tbl 字体表配置。"
+  },
+  "hook_targets": [
+    {
+      "target_type": "engine_file_api",
+      "description": "PFS 资源读取钩子，用于虚拟化字体文件与表文件（list_windows*.tbl）",
+      "risk_level": "medium"
+    },
+    {
+      "target_type": "engine_cache",
+      "description": "FreeType 字体对象、字体图集与内部哈希缓存的发现与刷新",
+      "risk_level": "medium"
+    }
+  ],
+  "container_recommendations": {
+    "wine_version_hint": "Wine 7+",
+    "dxvk": true,
+    "single_threaded": false,
+    "font_registry_replacement": false,
+    "notes": "中文显示需替换 PFS 内字体文件；位图字体引擎需额外生成字图图集。Wine 字体注册表对本引擎无效。"
+  },
+  "status": "draft",
+  "references": ["Artemis PFS 归档格式公开资料", "Lua 引擎架构公开资料"],
+  "last_updated": "2026-09-28"
+}

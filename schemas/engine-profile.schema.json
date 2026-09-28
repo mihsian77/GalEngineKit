@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/GalEngineKit/GalEngineKit/schemas/engine-profile.schema.json",
+  "title": "GalEngineKit Engine Profile",
+  "description": "引擎适配档案：描述 galgame/视觉小说引擎的识别特征、文本渲染路径、字体方案、钩子目标与容器配置建议。所有内容为独立整理的客观事实。",
+  "type": "object",
+  "required": ["engine_id", "name", "text_rendering_path", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "engine_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+$",
+      "description": "引擎唯一标识，小写字母、数字、下划线"
+    },
+    "name": {
+      "type": "string",
+      "description": "引擎正式名称"
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "引擎别名、俗称、旧称"
+    },
+    "detection_signatures": {
+      "type": "object",
+      "description": "引擎识别特征（正向检测依据）",
+      "additionalProperties": false,
+      "properties": {
+        "module_markers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "主模块或已加载模块中的稳定字符串/导出标记"
+        },
+        "directory_structures": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "游戏目录中的特征文件或目录结构"
+        },
+        "archive_formats": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "资源归档格式特征（扩展名、魔数等）"
+        }
+      }
+    },
+    "text_rendering_path": {
+      "type": "string",
+      "enum": ["gdi", "gdiplus", "directwrite", "freetype", "bitmap", "hybrid"],
+      "description": "文本渲染路径：gdi / gdiplus / directwrite / freetype（引擎自带）/ bitmap（位图字体）/ hybrid（混合）"
+    },
+    "font_strategy": {
+      "type": "object",
+      "description": "字体替换/修复方案",
+      "additionalProperties": false,
+      "properties": {
+        "recommended_approach": {
+          "type": "string",
+          "enum": ["wine_registry", "file_replacement", "engine_hook", "bitmap_atlas", "none"],
+          "description": "推荐方案：wine_registry（Wine 字体注册表替换）/ file_replacement（替换引擎字体文件）/ engine_hook（引擎运行时钩子）/ bitmap_atlas（位图图集生成）/ none（无需处理）"
+        },
+        "notes": {
+          "type": "string",
+          "description": "方案说明与注意事项"
+        }
+      }
+    },
+    "hook_targets": {
+      "type": "array",
+      "description": "钩子目标（仅限游戏自身代码，不包含模拟器内置 API）",
+      "items": {
+        "type": "object",
+        "required": ["target_type", "description", "risk_level"],
+        "additionalProperties": false,
+        "properties": {
+          "target_type": {
+            "type": "string",
+            "enum": ["engine_runtime", "engine_file_api", "engine_cache"],
+            "description": "目标类型：engine_runtime（引擎运行时函数）/ engine_file_api（引擎文件读取）/ engine_cache（引擎缓存）"
+          },
+          "description": {
+            "type": "string",
+            "description": "目标描述"
+          },
+          "risk_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+            "description": "在动态二进制翻译环境下的钩子风险等级"
+          }
+        }
+      }
+    },
+    "container_recommendations": {
+      "type": "object",
+      "description": "容器/运行环境配置建议",
+      "additionalProperties": false,
+      "properties": {
+        "wine_version_hint": {
+          "type": "string",
+          "description": "推荐的兼容层版本"
+        },
+        "dxvk": {
+          "type": "boolean",
+          "description": "是否需要 DXVK（Direct3D 转 Vulkan）"
+        },
+        "single_threaded": {
+          "type": "boolean",
+          "description": "是否需要单线程运行"
+        },
+        "font_registry_replacement": {
+          "type": "boolean",
+          "description": "Wine 字体注册表替换是否有效"
+        },
+        "notes": {
+          "type": "string",
+          "description": "其他配置注意事项"
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "verified", "maintained"],
+      "description": "档案状态：draft（草稿）/ verified（已验证）/ maintained（持续维护）"
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "客观格式与架构资料来源（非代码参考）"
+    },
+    "last_updated": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "description": "最后更新日期（YYYY-MM-DD）"
+    }
+  }
+}

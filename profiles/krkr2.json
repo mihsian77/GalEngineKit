@@ -1,0 +1,32 @@
+{
+  "engine_id": "krkr2",
+  "name": "KiriKiri (TVP / KAG)",
+  "aliases": ["吉里吉里", "TVP", "KAG", "KiriKiri2", "KiriKiri Z"],
+  "detection_signatures": {
+    "module_markers": ["mapPrerenderedFont", "V2Link", "TVP", "tjs"],
+    "directory_structures": ["data.xp3", "*.xp3"],
+    "archive_formats": ["xp3"]
+  },
+  "text_rendering_path": "hybrid",
+  "font_strategy": {
+    "recommended_approach": "wine_registry",
+    "notes": "KiriKiri 使用 GDI 字体创建，同时维护预渲染字体缓存（TFT）。GDI 路径可通过 Wine 字体注册表替换覆盖中文显示；预渲染缓存可能导致部分文字不更新，需引擎钩子配合清除或禁用 mapPrerenderedFont。"
+  },
+  "hook_targets": [
+    {
+      "target_type": "engine_runtime",
+      "description": "TVP Font.mapPrerenderedFont / unmapPrerenderedFont 原生方法，控制预渲染字体缓存的映射与解除",
+      "risk_level": "medium"
+    }
+  ],
+  "container_recommendations": {
+    "wine_version_hint": "Wine 7+ 均可",
+    "dxvk": true,
+    "single_threaded": false,
+    "font_registry_replacement": true,
+    "notes": "中文显示主要通过 Wine 字体注册表替换解决；部分游戏的预渲染字体可能导致文字显示异常，需引擎钩子配合处理。"
+  },
+  "status": "verified",
+  "references": ["KiriKiri 官方文档", "XP3 归档格式公开资料"],
+  "last_updated": "2026-09-28"
+}
