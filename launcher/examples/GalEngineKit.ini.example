@@ -1,0 +1,43 @@
+; GalEngineKit Launcher 配置示例
+; 复制为 GalEngineKit.ini 并修改为你的游戏配置
+
+[Launcher]
+; 目标可执行文件路径（相对路径基于 WorkingDir）
+TargetEXE = game.exe
+; 工作目录
+WorkingDir = .
+; 附加命令行参数
+CommandLine =
+; 创建后是否保持挂起（true 时需手动恢复，用于调试）
+StaySuspended = false
+; 日志级别: error, warn, info, debug
+LogLevel = info
+
+[Inject]
+; 要注入的 DLL 数量
+DLLCount = 1
+; DLL 路径列表（从 0 开始编号，按顺序注入）
+DLL_0 = hooks/krkr2_font.dll
+; 注入方式: import_table（推荐）| helper（兜底）| auto（先导入表，失败则辅助）
+InjectMethod = auto
+; 注入超时（毫秒）
+TimeoutMs = 15000
+
+[Patch]
+; 静态字节补丁数量
+PatchCount = 0
+; 补丁文件路径（每个补丁文件可包含多条规则）
+; Patch_0_File = patches/remove_drm.bp
+; Patch_0_Description = 移除版本检查
+
+[Environment]
+; 启动目标进程时设置的环境变量
+; Wine 常用:
+; WINEDLLOVERRIDES = winmm=n,b
+; WINEDEBUG = -all
+; 自定义:
+; GALENGINEKIT_PROFILE = krkr2
+
+[GUI]
+; （命令行版本暂不支持 GUI，此节保留供未来使用）
+Enabled = false
