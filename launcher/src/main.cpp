@@ -41,17 +41,31 @@ static void PrintVersion() {
     WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), version, (DWORD)wcslen(version), nullptr, nullptr);
 }
 
-int wmain(int argc, wchar_t* argv[]) {
+int main(int argc, char* argv[]) {
+    // 获取宽字符命令行参数（兼容 MinGW 和 MSVC，不依赖 wmain/-municode）
+    int wargc = 0;
+    wchar_t** wargv = CommandLineToArgvW(GetCommandLineW(), &wargc);
+    if (!wargv) {
+        // 回退：用 ANSI 参数转换
+        wargc = argc;
+        wargv = (wchar_t**)LocalAlloc(LMEM_FIXED, argc * sizeof(wchar_t*));
+        for (int i = 0; i < argc; i++) {
+            int len = MultiByteToWideChar(CP_ACP, 0, argv[i], -1, nullptr, 0);
+            wargv[i] = (wchar_t*)LocalAlloc(LMEM_FIXED, len * sizeof(wchar_t));
+            MultiByteToWideChar(CP_ACP, 0, argv[i], -1, wargv[i], len);
+        }
+    }
+
     // 默认参数
     std::wstring config_path = L"GalEngineKit.ini";
     LogLevel log_level = LogLevel::Info;
     bool wait_for_exit = true;
     bool dry_run = false;
-    bool has_config = false;
+    int exit_code = 0;
 
     // 解析命令行参数
-    for (int i = 1; i < argc; i++) {
-        std::wstring arg = argv[i];
+    for (int i = 1; i < wargc; i++) {
+        std::wstring arg = wargv[i];
 
         if (arg == L"-h" || arg == L"--help") {
             PrintUsage();
@@ -116,7 +130,8 @@ int wmain(int argc, wchar_t* argv[]) {
     ResultCode rc = ConfigLoader::LoadFromFile(config_path, config);
     if (rc != ResultCode::Success) {
         GE_LOG_ERROR(L"配置加载失败");
-        return (int)rc;
+        exit_code = (int)rc;
+        goto cleanup;
     }
 
     // 覆盖日志级别（如果配置文件中指定了）
@@ -128,19 +143,28 @@ int wmain(int argc, wchar_t* argv[]) {
         rc = ConfigLoader::Validate(config);
         if (rc == ResultCode::Success) {
             GE_LOG_INFO(L"配置校验通过");
-            return 0;
+            exit_code = 0;
         } else {
             GE_LOG_ERROR(L"配置校验失败");
-            return (int)rc;
+            exit_code = (int)rc;
         }
+        goto cleanup;
     }
 
     // 执行启动流程
-    int exit_code = Launcher::Run(config, wait_for_exit);
+    exit_code = Launcher::Run(config, wait_for_exit);
 
     if (exit_code != 0) {
         GE_LOG_WARN(L"启动器以非零退出码结束: " + std::to_wstring(exit_code));
     }
 
+cleanup:
+    // 释放宽字符参数数组
+    if (wargv) {
+        // CommandLineToArgvW 分配的内存用 LocalFree 释放
+        // 回退路径中每个字符串和数组都用 LocalAlloc 分配，需要逐个释放
+        // 但简单起见，进程退出时 OS 会回收，这里只释放数组指针
+        LocalFree(wargv);
+    }
     return exit_code;
 }
