@@ -34,8 +34,8 @@ if(MSVC)
     set_property(TARGET GalEngineKitLauncher PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded")
 elseif(MINGW)
     target_compile_options(GalEngineKitLauncher PRIVATE -Wall -Wextra -Wno-unused-parameter)
-    # 静态链接（减少依赖）
-    target_link_options(GalEngineKitLauncher PRIVATE -static -static-libgcc -static-libstdc++)
+    # 控制台子系统（入口点 wmain）+ 静态链接（减少依赖）
+    target_link_options(GalEngineKitLauncher PRIVATE -mconsole -static -static-libgcc -static-libstdc++)
 endif()
 
 # 链接库（Windows 系统库）
