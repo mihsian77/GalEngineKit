@@ -61,6 +61,7 @@ int main(int argc, char* argv[]) {
     LogLevel log_level = LogLevel::Info;
     bool wait_for_exit = true;
     bool dry_run = false;
+    bool has_config = false;
     int exit_code = 0;
 
     // 解析命令行参数
@@ -69,11 +70,13 @@ int main(int argc, char* argv[]) {
 
         if (arg == L"-h" || arg == L"--help") {
             PrintUsage();
-            return 0;
+            exit_code = 0;
+            goto cleanup;
         }
         if (arg == L"-v" || arg == L"--version") {
             PrintVersion();
-            return 0;
+            exit_code = 0;
+            goto cleanup;
         }
         if (arg == L"--no-wait") {
             wait_for_exit = false;
@@ -84,25 +87,27 @@ int main(int argc, char* argv[]) {
             continue;
         }
         if (arg == L"-c" || arg == L"--config") {
-            if (i + 1 < argc) {
-                config_path = argv[++i];
+            if (i + 1 < wargc) {
+                config_path = wargv[++i];
                 has_config = true;
             } else {
                 PrintUsage();
-                return 1;
+                exit_code = 1;
+                goto cleanup;
             }
             continue;
         }
         if (arg == L"-l" || arg == L"--log-level") {
-            if (i + 1 < argc) {
-                std::wstring level = argv[++i];
+            if (i + 1 < wargc) {
+                std::wstring level = wargv[++i];
                 if (level == L"error") log_level = LogLevel::Error;
                 else if (level == L"warn" || level == L"warning") log_level = LogLevel::Warn;
                 else if (level == L"debug") log_level = LogLevel::Debug;
                 else log_level = LogLevel::Info;
             } else {
                 PrintUsage();
-                return 1;
+                exit_code = 1;
+                goto cleanup;
             }
             continue;
         }
