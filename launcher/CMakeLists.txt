@@ -19,6 +19,7 @@ set(SOURCES
     src/injector.cpp
     src/patcher.cpp
     src/launcher.cpp
+    src/engine_detector.cpp
 )
 
 # 头文件目录

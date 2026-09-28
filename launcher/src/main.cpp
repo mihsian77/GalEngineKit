@@ -5,10 +5,12 @@
 #include "ge_config.h"
 #include "ge_logger.h"
 #include "ge_launcher.h"
+#include "ge_engine_detector.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <string>
 #include <vector>
+#include <algorithm>
 
 using namespace ge;
 
@@ -132,12 +134,114 @@ int main(int argc, char* argv[]) {
     GE_LOG_INFO(L"配置文件: " + config_path);
     GE_LOG_INFO(L"日志级别: " + std::to_wstring((int)log_level));
 
-    // 加载配置
-    rc = ConfigLoader::LoadFromFile(config_path, config);
-    if (rc != ResultCode::Success) {
-        GE_LOG_ERROR(L"配置加载失败");
-        exit_code = (int)rc;
-        goto cleanup;
+    // ===== 配置加载 / 智能识别 =====
+    bool config_file_exists = (GetFileAttributesW(config_path.c_str()) != INVALID_FILE_ATTRIBUTES);
+
+    if (!config_file_exists && !has_config) {
+        // === 智能模式：无配置文件，自动扫描当前目录 ===
+        GE_LOG_INFO(L"未找到配置文件，进入智能识别模式...");
+
+        // 获取当前工作目录
+        wchar_t current_dir[MAX_PATH];
+        GetCurrentDirectoryW(MAX_PATH, current_dir);
+        std::wstring working_dir = current_dir;
+        GE_LOG_INFO(L"工作目录: " + working_dir);
+
+        // 1. 识别引擎
+        EngineDetectionResult detection = EngineDetector::Detect(working_dir);
+        if (detection.found) {
+            GE_LOG_INFO(L"引擎识别: " + detection.engine_name +
+                L" (ID: " + detection.engine_id +
+                L", 置信度: " + std::to_wstring(detection.confidence) + L"%)");
+        } else {
+            GE_LOG_WARN(L"未识别到已知引擎，将使用通用配置");
+        }
+
+        // 2. 查找游戏 exe（排除启动器自身）
+        std::wstring target_exe;
+        std::vector<std::wstring> all_exes;
+        WIN32_FIND_DATAW fd;
+        HANDLE hFind = FindFirstFileW((working_dir + L"\\*.exe").c_str(), &fd);
+        if (hFind != INVALID_HANDLE_VALUE) {
+            do {
+                if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) {
+                    if (_wcsicmp(fd.cFileName, L"GalEngineKitLauncher.exe") != 0) {
+                        all_exes.push_back(fd.cFileName);
+                    }
+                }
+            } while (FindNextFileW(hFind, &fd));
+            FindClose(hFind);
+        }
+
+        if (all_exes.empty()) {
+            GE_LOG_ERROR(L"智能模式：当前目录下未找到游戏可执行文件");
+            GE_LOG_INFO(L"请将启动器放到游戏目录中，或使用 -c 指定配置文件");
+            exit_code = (int)ResultCode::ConfigLoadFailed;
+            goto cleanup;
+        }
+
+        // 如果有多个 exe，优先匹配引擎特征名，否则用第一个
+        target_exe = all_exes[0];
+        for (const auto& exe : all_exes) {
+            // 简单启发式：排除设置程序、卸载程序等
+            std::wstring lower = exe;
+            std::transform(lower.begin(), lower.end(), lower.begin(), towlower);
+            if (lower.find(L"config") == std::wstring::npos &&
+                lower.find(L"setup") == std::wstring::npos &&
+                lower.find(L"unins") == std::wstring::npos &&
+                lower.find(L"tool") == std::wstring::npos) {
+                target_exe = exe;
+                break;
+            }
+        }
+        GE_LOG_INFO(L"目标程序: " + target_exe);
+
+        // 3. 生成配置
+        config.target_exe = target_exe;
+        config.working_dir = working_dir;
+        config.command_line = L"";
+        config.stay_suspended = false;
+        config.log_level = log_level;
+        config.inject_method = InjectMethod::Auto;
+
+        // 4. 自动匹配钩子 DLL
+        // 优先查找 hooks/<engine_id>_hook.dll
+        std::wstring engine_hook = L"hooks\\" + detection.engine_id + L"_hook.dll";
+        if (GetFileAttributesW((working_dir + L"\\" + engine_hook).c_str()) != INVALID_FILE_ATTRIBUTES) {
+            config.dll_paths.push_back(engine_hook);
+            GE_LOG_INFO(L"自动匹配引擎钩子: " + engine_hook);
+        }
+        // 其次查找 example_hook.dll（用于测试注入链路）
+        else if (GetFileAttributesW((working_dir + L"\\example_hook.dll").c_str()) != INVALID_FILE_ATTRIBUTES) {
+            config.dll_paths.push_back(L"example_hook.dll");
+            GE_LOG_INFO(L"使用示例钩子: example_hook.dll（验证注入链路）");
+        }
+        // 没有钩子 DLL 时只做静态补丁（如果有）
+        else {
+            GE_LOG_INFO(L"未找到钩子 DLL，将以纯启动模式运行（无注入）");
+        }
+
+        GE_LOG_INFO(L"智能配置生成完成");
+        if (all_exes.size() > 1) {
+            GE_LOG_INFO(L"提示：目录下有多个 exe，已选择 " + target_exe +
+                L"。如需修改请编辑 GalEngineKit.ini");
+        }
+
+    } else {
+        // === 配置文件模式：加载指定配置 ===
+        if (!config_file_exists) {
+            GE_LOG_ERROR(L"配置文件不存在: " + config_path);
+            exit_code = (int)ResultCode::ConfigLoadFailed;
+            goto cleanup;
+        }
+
+        rc = ConfigLoader::LoadFromFile(config_path, config);
+        if (rc != ResultCode::Success) {
+            GE_LOG_ERROR(L"配置加载失败");
+            exit_code = (int)rc;
+            goto cleanup;
+        }
+        GE_LOG_INFO(L"配置文件加载成功");
     }
 
     // 覆盖日志级别（如果配置文件中指定了）
