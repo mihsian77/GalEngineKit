@@ -63,6 +63,8 @@ int main(int argc, char* argv[]) {
     bool dry_run = false;
     bool has_config = false;
     int exit_code = 0;
+    LauncherConfig config;   // 提前声明，避免 goto cleanup 跳过初始化
+    ResultCode rc = ResultCode::Success;
 
     // 解析命令行参数
     for (int i = 1; i < wargc; i++) {
@@ -131,8 +133,7 @@ int main(int argc, char* argv[]) {
     GE_LOG_INFO(L"日志级别: " + std::to_wstring((int)log_level));
 
     // 加载配置
-    LauncherConfig config;
-    ResultCode rc = ConfigLoader::LoadFromFile(config_path, config);
+    rc = ConfigLoader::LoadFromFile(config_path, config);
     if (rc != ResultCode::Success) {
         GE_LOG_ERROR(L"配置加载失败");
         exit_code = (int)rc;
