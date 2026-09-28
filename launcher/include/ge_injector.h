@@ -5,6 +5,7 @@
 #define GALENGINEKIT_INJECTOR_H
 
 #include "ge_types.h"
+#include "ge_pe.h"
 #include <vector>
 #include <string>
 
