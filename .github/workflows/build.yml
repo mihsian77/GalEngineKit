@@ -1,0 +1,81 @@
+name: Build Launcher
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'launcher/**'
+
+jobs:
+  build-windows:
+    name: Build (Windows, ${{ matrix.arch }})
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [Win32, x64]
+        config: [Release, Debug]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Configure CMake
+      working-directory: launcher
+      run: cmake -B build -G "Visual Studio 17 2022" -A ${{ matrix.arch }}
+
+    - name: Build
+      working-directory: launcher
+      run: cmake --build build --config ${{ matrix.config }} --parallel
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GalEngineKitLauncher-${{ matrix.arch }}-${{ matrix.config }}
+        path: launcher/build/bin/${{ matrix.config }}/GalEngineKitLauncher.exe
+        if-no-files-found: error
+
+  build-mingw:
+    name: Build (MinGW cross-compile, ${{ matrix.arch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - arch: i686
+            triplet: i686-w64-mingw32
+          - arch: x86_64
+            triplet: x86_64-w64-mingw32
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install MinGW
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y mingw-w64 cmake
+
+    - name: Configure CMake
+      working-directory: launcher
+      run: |
+        cmake -B build -G "Unix Makefiles" \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_C_COMPILER=${{ matrix.triplet }}-gcc \
+          -DCMAKE_CXX_COMPILER=${{ matrix.triplet }}-g++ \
+          -DCMAKE_RC_COMPILER=${{ matrix.triplet }}-windres \
+          -DCMAKE_BUILD_TYPE=Release
+
+    - name: Build
+      working-directory: launcher
+      run: cmake --build build --parallel
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: GalEngineKitLauncher-MinGW-${{ matrix.arch }}
+        path: launcher/build/bin/GalEngineKitLauncher.exe
+        if-no-files-found: error
