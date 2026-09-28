@@ -65,6 +65,7 @@ int main(int argc, char* argv[]) {
     int exit_code = 0;
     LauncherConfig config;   // 提前声明，避免 goto cleanup 跳过初始化
     ResultCode rc = ResultCode::Success;
+    Logger& logger = Logger::Instance();  // 提前声明，避免 goto cleanup 跳过引用绑定
 
     // 解析命令行参数
     for (int i = 1; i < wargc; i++) {
@@ -122,7 +123,6 @@ int main(int argc, char* argv[]) {
     }
 
     // 初始化日志
-    Logger& logger = Logger::Instance();
     logger.SetLevel(log_level);
 
     // 初始化日志文件（在当前目录的 logs/ 下）
