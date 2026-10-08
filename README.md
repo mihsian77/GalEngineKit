@@ -2,7 +2,6 @@
 
 > **galgame 引擎适配与中文化工具箱** — 一个 exe，零配置，自动识别游戏引擎，注入钩子，搞定字体与汉化。
 
-**独立实现 · 原创代码 · MIT 许可 · 单文件 exe · 全环境兼容**
 
 ---
 
@@ -13,7 +12,7 @@
 把 `GalEngineKitLauncher.exe` 丢进游戏目录，双击运行。启动器自动：
 
 - 扫描目录特征文件、归档格式、可执行文件名
-- 内置 **11 种常见引擎**识别规则（KiriKiri2 / YU-RIS / Ren'Py / Unity / Artemis / CatSystem2 / BGI / Majiro / Tyrano / RPG Maker VX Ace / RPG Maker MV）
+- 内置多种常见引擎识别规则（KiriKiri2 / YU-RIS / Ren'Py / Unity / Artemis / CatSystem2 / BGI / Majiro / Tyrano / RPG Maker VX Ace / RPG Maker MV）
 - 自动选择目标 exe（排除设置程序、卸载程序）
 - 自动匹配对应引擎的钩子 DLL（`hooks/<engine_id>_hook.dll`）
 - 生成配置并直接运行，**不需要写任何 ini 文件**
