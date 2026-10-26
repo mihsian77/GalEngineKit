@@ -11,11 +11,13 @@
 // 设计约束（Winlator/Box64 转译环境安全）：
 //   - 只改 PE 导入表数据区（IAT），不修改代码段，不触发翻译缓存失效
 //   - 不钩 Wine 内置 DLL 的导出，钩子只拦截游戏进程自身的 IAT
-// 已知限制（Phase 2 处理）：
-//   - TVP 若通过 GetProcAddress 动态获取字体 API，IAT 钩子不命中，
-//     需改用 EAT 钩子 / GetProcAddress 拦截（实测确认后再实施）
+// 已知限制（实测确认，Phase 2 已实施）：
+//   - 实测 krkr.exe（NVL Maker/KiriKiri 运行时）从 gdi32 仅静态导入 BitBlt，
+//     字体 API（CreateFontIndirectW/CreateFontW）全部通过 GetProcAddress
+//     动态获取 → IAT 钩 gdi32 不命中。改为 IAT 钩 kernel32!GetProcAddress，
+//     拦截字体 API 名称返回替换函数。
 //   - 预渲染字体缓存（mapPrerenderedFont / TFT）未处理，若游戏预渲染
-//     中文所需字形，替换可能不生效，需引擎级钩子配合
+//     中文所需字形，替换可能不生效，需引擎级钩子配合（Phase 3）
 
 #include "ge_hook_api.h"
 #include <windows.h>
@@ -44,8 +46,10 @@ static const wchar_t* const g_jpBlacklist[] = {
 typedef HFONT(WINAPI* PFN_CreateFontIndirectW)(const LOGFONTW*);
 typedef HFONT(WINAPI* PFN_CreateFontW)(int, int, int, int, DWORD, DWORD, DWORD, DWORD,
                                        DWORD, DWORD, DWORD, DWORD, DWORD, LPCWSTR);
+typedef FARPROC(WINAPI* PFN_GetProcAddress)(HMODULE, LPCSTR);
 static PFN_CreateFontIndirectW g_origCreateFontIndirectW = NULL;
 static PFN_CreateFontW g_origCreateFontW = NULL;
+static PFN_GetProcAddress g_origGetProcAddress = NULL;
 
 // ===== 日志 =====
 static void HookLogV(const wchar_t* fmt, va_list args) {
@@ -199,17 +203,48 @@ static bool PatchIat(const char* dllName, const char* funcName, void* newFunc, v
     return false;  // DLL 未导入
 }
 
+// ===== GetProcAddress 拦截 =====
+// KiriKiri 的字体 API 全部动态获取，拦截 GetProcAddress 是唯一可行注入点。
+// 注意：安装 GetProcAddress 钩子前必须先保存原始字体函数地址，
+// 否则后续获取原始函数会递归进入自己的钩子。
+static FARPROC WINAPI HookGetProcAddress(HMODULE hModule, LPCSTR lpProcName) {
+    if (g_enabled && lpProcName && ((ULONG_PTR)lpProcName > 0xFFFF)) {
+        // 按名称导入（序号 < 0xFFFF 直接转发）
+        if (_stricmp(lpProcName, "CreateFontIndirectW") == 0) {
+            HookLog(L"GetProcAddress 拦截: %s -> HookCreateFontIndirectW", lpProcName);
+            return (FARPROC)HookCreateFontIndirectW;
+        }
+        if (_stricmp(lpProcName, "CreateFontW") == 0) {
+            HookLog(L"GetProcAddress 拦截: %s -> HookCreateFontW", lpProcName);
+            return (FARPROC)HookCreateFontW;
+        }
+    }
+    return g_origGetProcAddress(hModule, lpProcName);
+}
+
 // ===== 钩子安装 =====
 static void InstallHooks() {
-    bool ok1 = PatchIat("gdi32.dll", "CreateFontIndirectW",
-                        (void*)HookCreateFontIndirectW, (void**)&g_origCreateFontIndirectW);
-    bool ok2 = PatchIat("gdi32.dll", "CreateFontW",
-                        (void*)HookCreateFontW, (void**)&g_origCreateFontW);
-
-    if (ok1 || ok2) {
-        HookLog(L"IAT 钩子安装: CreateFontIndirectW=%d CreateFontW=%d", ok1, ok2);
+    // 1. 先获取原始字体 API 地址（GetProcAddress 钩子未装，不会递归）
+    HMODULE gdi32 = LoadLibraryA("gdi32.dll");
+    if (gdi32) {
+        g_origCreateFontIndirectW = (PFN_CreateFontIndirectW)
+            GetProcAddress(gdi32, "CreateFontIndirectW");
+        g_origCreateFontW = (PFN_CreateFontW)
+            GetProcAddress(gdi32, "CreateFontW");
+        HookLog(L"原始字体 API: CreateFontIndirectW=0x%p CreateFontW=0x%p",
+                (void*)g_origCreateFontIndirectW, (void*)g_origCreateFontW);
     } else {
-        HookLog(L"警告: gdi32 字体 API 未在导入表中找到（可能动态加载，需 Phase 2 EAT 方案）");
+        HookLog(L"错误: 无法加载 gdi32.dll");
+        return;
+    }
+
+    // 2. 钩 GetProcAddress（kernel32 静态导入，IAT 必命中）
+    bool ok = PatchIat("kernel32.dll", "GetProcAddress",
+                       (void*)HookGetProcAddress, (void**)&g_origGetProcAddress);
+    if (ok) {
+        HookLog(L"GetProcAddress 钩子安装成功（拦截字体 API 动态获取）");
+    } else {
+        HookLog(L"错误: kernel32 GetProcAddress 未在导入表中");
     }
 }
 
