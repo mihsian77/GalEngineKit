@@ -90,7 +90,22 @@ bool ProcessManager::WriteMemory(HANDLE process, uintptr_t address, const void* 
 }
 
 uintptr_t ProcessManager::AllocateMemory(HANDLE process, size_t size, DWORD protection) {
-    LPVOID addr = VirtualAllocEx(process, nullptr, size, MEM_COMMIT | MEM_RESERVE, protection);
+    return AllocateMemory(process, size, protection, 0);
+}
+
+uintptr_t ProcessManager::AllocateMemory(HANDLE process, size_t size, DWORD protection, uintptr_t preferred) {
+    LPVOID addr = nullptr;
+    if (preferred) {
+        // 优先在指定地址分配（导入表注入需要地址高于模块基址，否则 RVA 为负）
+        addr = VirtualAllocEx(process, (LPVOID)preferred, size, MEM_COMMIT | MEM_RESERVE, protection);
+        if (!addr) {
+            GE_LOG_WARN(L"在首选地址分配失败 0x" + std::to_wstring(preferred) +
+                L"，回退自由分配");
+            addr = VirtualAllocEx(process, nullptr, size, MEM_COMMIT | MEM_RESERVE, protection);
+        }
+    } else {
+        addr = VirtualAllocEx(process, nullptr, size, MEM_COMMIT | MEM_RESERVE, protection);
+    }
     if (!addr) {
         GE_LOG_ERROR(L"VirtualAllocEx 失败，大小: " + std::to_wstring(size));
         return 0;

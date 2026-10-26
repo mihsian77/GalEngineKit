@@ -9,6 +9,16 @@
 
 namespace ge {
 
+// 检测当前进程是否运行在 Wine/Winlator 环境下
+// 实测结论：Wine 的加载器在 CreateProcess(CREATE_SUSPENDED) 时已完成静态导入
+// 解析，ResumeThread 后不会重新读取修改后的 PE 导入表——导入表注入在 Wine
+// 下不生效，必须改用辅助线程注入（CreateRemoteThread + LoadLibraryW）
+static bool IsUnderWineEnvironment() {
+    HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+    if (!ntdll) return false;
+    return GetProcAddress(ntdll, "wine_get_version") != nullptr;
+}
+
 ResultCode DllInjector::InjectByImportTable(
     HANDLE process,
     DWORD process_id,
@@ -118,10 +128,23 @@ bool DllInjector::BuildNewImportTable(
     size_t descriptors_count = dll_count + original_count + 1; // +1 结束符
     size_t descriptors_size = descriptors_count * sizeof(IMAGE_IMPORT_DESCRIPTOR);
 
-    // DLL 名字符串总大小（每个含 \0）
-    size_t dll_names_size = 0;
+    // DLL 名（导入表的 DLL 名必须是 ANSI 字符串，PE/COFF 规范；写入宽字符会让
+    // 加载器读到第一个字符即截断导致加载失败）
+    std::vector<std::string> dll_names_ansi;
     for (const auto& path : new_dll_paths) {
-        dll_names_size += (path.size() + 1) * sizeof(wchar_t);
+        char ansi_buf[1024];
+        int len = WideCharToMultiByte(CP_ACP, 0, path.c_str(), -1,
+            ansi_buf, sizeof(ansi_buf), nullptr, nullptr);
+        if (len > 0) {
+            dll_names_ansi.push_back(std::string(ansi_buf, static_cast<size_t>(len) - 1));
+        } else {
+            dll_names_ansi.push_back(std::string());
+        }
+    }
+
+    size_t dll_names_size = 0;
+    for (const auto& name : dll_names_ansi) {
+        dll_names_size += name.size() + 1;
     }
 
     // 每个 DLL 需要一个 INT 和一个 IAT，每个包含 1 个全零 thunk（表示结束）
@@ -140,7 +163,11 @@ bool DllInjector::BuildNewImportTable(
     GE_LOG_DEBUG(L"  IAT: " + std::to_wstring(iat_size) + L" 字节");
 
     // 在目标进程中分配内存
-    uintptr_t memory = ProcessManager::AllocateMemory(process, total_size, PAGE_READWRITE);
+    // 必须在模块基址之上分配：导入表的 RVA = 地址 - 模块基址，若地址低于基址，
+    // RVA 为负值（uint32 溢出成 0xFFD1xxxx），加载器按 image_base + RVA 解析时
+    // 超出地址空间，DLL 名/INT/IAT 全部失效导致加载失败
+    uintptr_t preferred_addr = module_base + 0x4000000;  // 模块镜像后 64MB 处
+    uintptr_t memory = ProcessManager::AllocateMemory(process, total_size, PAGE_READWRITE, preferred_addr);
     if (memory == 0) {
         GE_LOG_ERROR(L"分配新导入表内存失败");
         return false;
@@ -158,10 +185,11 @@ bool DllInjector::BuildNewImportTable(
     std::vector<IMAGE_IMPORT_DESCRIPTOR> all_descriptors;
 
     // 先添加新 DLL 的描述符
+    size_t name_offset = 0;
     for (size_t i = 0; i < dll_count; i++) {
         IMAGE_IMPORT_DESCRIPTOR desc = {};
         desc.Name = PeHelper::AddressToRva(module_base,
-            out_layout.dll_names + i * ((new_dll_paths[i].size() + 1) * sizeof(wchar_t)));
+            out_layout.dll_names + name_offset);
         desc.OriginalFirstThunk = PeHelper::AddressToRva(module_base,
             out_layout.int_array + i * thunk_size);
         desc.FirstThunk = PeHelper::AddressToRva(module_base,
@@ -169,6 +197,7 @@ bool DllInjector::BuildNewImportTable(
         desc.TimeDateStamp = 0;
         desc.ForwarderChain = 0;
         all_descriptors.push_back(desc);
+        name_offset += dll_names_ansi[i].size() + 1;
 
         GE_LOG_DEBUG(L"  新 DLL[" + std::to_wstring(i) + L"]: " + new_dll_paths[i]);
         GE_LOG_DEBUG(L"    Name RVA=0x" + std::to_wstring(desc.Name));
@@ -188,16 +217,15 @@ bool DllInjector::BuildNewImportTable(
         return false;
     }
 
-    // 写入 DLL 名字符串
+    // 写入 DLL 名字符串（ANSI）
     uintptr_t name_ptr = out_layout.dll_names;
-    for (const auto& path : new_dll_paths) {
-        size_t bytes = (path.size() + 1) * sizeof(wchar_t);
-        if (!ProcessManager::WriteMemory(process, name_ptr, path.c_str(), bytes)) {
-            GE_LOG_ERROR(L"写入 DLL 名字符串失败: " + path);
+    for (const auto& name : dll_names_ansi) {
+        if (!ProcessManager::WriteMemory(process, name_ptr, name.c_str(), name.size() + 1)) {
+            GE_LOG_ERROR(L"写入 DLL 名字符串失败");
             ProcessManager::FreeMemory(process, memory, total_size);
             return false;
         }
-        name_ptr += bytes;
+        name_ptr += name.size() + 1;
     }
 
     // INT 和 IAT 已经是全零（VirtualAllocEx 初始化为零），不需要额外写入
@@ -300,6 +328,17 @@ ResultCode DllInjector::InjectAuto(
 
         case InjectMethod::Auto:
         default: {
+            // Wine/Winlator：加载器已在进程创建时解析导入表，导入表注入无效，
+            // 直接用辅助线程注入（实测确认）
+            if (IsUnderWineEnvironment()) {
+                GE_LOG_INFO(L"检测到 Wine 环境，导入表注入不生效，改用辅助线程注入");
+                for (const auto& dll : dll_paths) {
+                    ResultCode rc = InjectByRemoteThread(process, dll);
+                    if (rc != ResultCode::Success) return rc;
+                }
+                return ResultCode::Success;
+            }
+
             GE_LOG_INFO(L"自动注入模式：先尝试导入表注入");
             ResultCode rc = InjectMultipleByImportTable(process, process_id, dll_paths);
             if (rc == ResultCode::Success) {

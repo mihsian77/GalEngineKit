@@ -26,8 +26,10 @@ public:
     // 写入进程内存
     static bool WriteMemory(HANDLE process, uintptr_t address, const void* buffer, size_t size);
 
-    // 在目标进程中分配内存
+    // 在目标进程中分配内存（preferred 为 0 时自由分配）
     static uintptr_t AllocateMemory(HANDLE process, size_t size, DWORD protection = PAGE_READWRITE);
+    // 带首选地址的分配：优先在指定地址分配，失败回退自由分配
+    static uintptr_t AllocateMemory(HANDLE process, size_t size, DWORD protection, uintptr_t preferred);
 
     // 释放目标进程内存
     static void FreeMemory(HANDLE process, uintptr_t address, size_t size);
