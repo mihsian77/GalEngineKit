@@ -13,11 +13,12 @@ std::vector<EngineDetector::EngineRule> EngineDetector::GetBuiltinRules() {
         // KiriKiri2 / KAG
         {
             L"krkr2", L"KiriKiri2",
-            { L"data.xp3", L"bgm.xp3", L"voice.xp3", L"scene.pck" },  // file_patterns
-            { L"savedata", L"savedata\\krkr" },                          // dir_patterns
-            { L".xp3" },                                                   // archive_exts
-            { L"krkr2.exe", L"krkr2.vent" },                             // exe_names
-            20                                                             // base_score
+            { L"data.xp3", L"bgm.xp3", L"voice.xp3", L"scene.pck",
+              L"Data\\startup.tjs", L"Data\\Config.tjs" },  // 目录模式游戏特征
+            { L"savedata", L"savedata\\krkr", L"Data" },      // Data 目录（目录模式运行时）
+            { L".xp3" },                                       // archive_exts
+            { L"krkr2.exe", L"krkr.exe", L"krkr2.vent" },     // krkr.exe = NVL Maker/krkrz 运行时名
+            20                                                 // base_score
         },
         // YU-RIS
         {
@@ -86,7 +87,7 @@ std::vector<EngineDetector::EngineRule> EngineDetector::GetBuiltinRules() {
         {
             L"tyrano", L"TyranoBuilder",
             { L"data\\tyrano", L"tyrano\\index.html" },
-            { L"data", L"tyrano" },
+            { L"data\\tyrano", L"tyrano" },   // 收紧：裸 data 会误伤带 Data/ 目录的其他引擎
             {},
             {},
             15
