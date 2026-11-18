@@ -263,6 +263,19 @@ cmake --build .
 
 CI 自动构建 32 位和 64 位版本，见 `.github/workflows/ci.yml`。
 
+### 测试
+
+测试默认不构建，加 `-DGEK_BUILD_TESTS=ON` 才会生成测试程序，产物和 DLL 一起落在 `build/bin`。
+
+```bash
+cmake .. -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release -DGEK_BUILD_TESTS=ON
+cmake --build .
+```
+
+CI 里跑两项：补丁库单测（指纹、匹配条件、目录筛选）、字体克隆单测（用系统里的 CJK 字体当源）。
+
+字体钩子和 `version.dll` 代理这两个测试没进 CI：它们断言要求前缀里真装着一个中文字体，在 CI 里靠注册表造一个假名字骗过断言没意义，只在本地 Windows 环境跑。代理那个还要 `WINEDLLOVERRIDES="version=n,b"`，否则 Wine 加载内置 version.dll，钩子根本不进来。
+
 ### 添加引擎档案
 
 在 `profiles/` 目录添加 `<engine_id>.json`，参考 `schemas/engine-profile.schema.json`。用 `tools/validate_profile.py` 校验：
