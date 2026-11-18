@@ -179,6 +179,18 @@ jobs:
         echo "== 补丁库 exit=$RC1 =="; cat /tmp/t-patch.log
         set -e
 
+        set +e
+        FONT=$(ls /usr/share/fonts/truetype/droid/*.ttf | head -1)
+        xvfb-run -a wine build/hooks/bin/test_font_clone.exe "Z:$FONT" > /tmp/t-clone.log 2>&1
+        RC2=$?
+        echo "== 字体克隆 exit=$RC2 =="; cat /tmp/t-clone.log
+        set -e
+
+        if [ $RC1 -ne 0 ]; then echo "补丁库测试退出码 $RC1"; exit 1; fi
+        grep -q "全部通过" /tmp/t-patch.log
+        if [ $RC2 -ne 0 ]; then echo "字体克隆测试退出码 $RC2"; exit 1; fi
+        grep -q "全部通过" /tmp/t-clone.log
+
     - name: 体检冒烟（--doctor）
       env:
         WINEPREFIX: ${{ github.workspace }}/.wine-gek
@@ -201,14 +213,3 @@ jobs:
         grep -q "程序位数" doctor.txt || { echo "报告缺少位数检查"; exit 1; }
         grep -q "结论" doctor.txt || { echo "报告缺少结论段"; exit 1; }
 
-        set +e
-        FONT=$(ls /usr/share/fonts/truetype/droid/*.ttf | head -1)
-        xvfb-run -a wine build/hooks/bin/test_font_clone.exe "Z:$FONT" > /tmp/t-clone.log 2>&1
-        RC2=$?
-        echo "== 字体克隆 exit=$RC2 =="; cat /tmp/t-clone.log
-        set -e
-
-        if [ $RC1 -ne 0 ]; then echo "补丁库测试退出码 $RC1"; exit 1; fi
-        grep -q "全部通过" /tmp/t-patch.log
-        if [ $RC2 -ne 0 ]; then echo "字体克隆测试退出码 $RC2"; exit 1; fi
-        grep -q "全部通过" /tmp/t-clone.log
