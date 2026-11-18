@@ -21,6 +21,7 @@ set(SOURCES
     src/patch_library.cpp
     src/launcher.cpp
     src/engine_detector.cpp
+    src/doctor.cpp
     resources/galenginekit.rc
 )
 

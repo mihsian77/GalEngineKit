@@ -144,6 +144,26 @@ jobs:
         echo "== 补丁库 exit=$RC1 =="; cat /tmp/t-patch.log
         set -e
 
+    - name: 体检冒烟（--doctor）
+      env:
+        WINEPREFIX: ${{ github.workspace }}/.wine-gek
+        WINEARCH: win32
+      run: |
+        FIX=/tmp/doctor-fixture
+        rm -rf $FIX && mkdir -p $FIX
+        cp build/launcher/bin/GalEngineKitLauncher.exe $FIX/game.exe
+        cd $FIX
+        set +e
+        xvfb-run -a wine ${{ github.workspace }}/build/launcher/bin/GalEngineKitLauncher.exe --doctor > /tmp/doctor.log 2>&1
+        RC=$?
+        set -e
+        echo "== doctor exit=$RC =="
+        cat /tmp/doctor.log
+        if [ $RC -ne 0 ]; then echo "doctor 返回非零"; exit 1; fi
+        if [ ! -f $FIX/doctor.txt ]; then echo "doctor.txt 没有生成"; exit 1; fi
+        grep -q "程序位数" doctor.txt || { echo "报告缺少位数检查"; exit 1; }
+        grep -q "结论" doctor.txt || { echo "报告缺少结论段"; exit 1; }
+
         set +e
         FONT=$(ls /usr/share/fonts/truetype/droid/*.ttf | head -1)
         xvfb-run -a wine build/hooks/bin/test_font_clone.exe "Z:$FONT" > /tmp/t-clone.log 2>&1

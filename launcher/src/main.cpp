@@ -6,6 +6,7 @@
 #include "ge_logger.h"
 #include "ge_launcher.h"
 #include "ge_engine_detector.h"
+#include "ge_doctor.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <string>
@@ -27,6 +28,8 @@ static void PrintUsage() {
         L"  -l, --log-level <级别>  设置日志级别: error, warn, info, debug\n"
         L"  --no-wait           不等待目标进程退出（启动后立即返回）\n"
         L"  --dry-run           仅校验配置，不实际启动进程\n"
+        L"  --doctor [目录]     体检：不启动游戏，检查程序位数、引擎、字体、补丁、运行环境\n"
+        L"                      不给目录就用当前目录，结果同时写入 doctor.txt\n"
         L"\n"
         L"示例:\n"
         L"  GalEngineKitLauncher.exe\n"
@@ -192,6 +195,8 @@ int main(int argc, char* argv[]) {
     LogLevel log_level = LogLevel::Info;
     bool wait_for_exit = true;
     bool dry_run = false;
+    bool doctor_mode = false;
+    std::wstring doctor_dir;
     bool has_config = false;
     int exit_code = 0;
     bool config_file_exists = false;  // 提前声明，避免 goto cleanup 跳过带初始化器的声明
@@ -219,6 +224,12 @@ int main(int argc, char* argv[]) {
         }
         if (arg == L"--dry-run") {
             dry_run = true;
+            continue;
+        }
+        if (arg == L"--doctor") {
+            doctor_mode = true;
+            // 可选目录参数；下一个参数以 - 开头就当没写
+            if (i + 1 < wargc && wargv[i + 1][0] != L'-') doctor_dir = wargv[++i];
             continue;
         }
         if (arg == L"-c" || arg == L"--config") {
@@ -263,6 +274,12 @@ int main(int argc, char* argv[]) {
     GE_LOG_INFO(L"GalEngineKit Launcher v0.1.0 启动");
     GE_LOG_INFO(L"配置文件: " + config_path);
     GE_LOG_INFO(L"日志级别: " + std::to_wstring((int)log_level));
+
+    // 体检模式：只查不启动
+    if (doctor_mode) {
+        exit_code = Doctor::Run(doctor_dir, L"doctor.txt");
+        goto cleanup;
+    }
 
     // 环境检测
     if (IsRunningUnderWine()) {
