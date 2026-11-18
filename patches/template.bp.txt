@@ -1,0 +1,5 @@
+; 补丁模板：复制成 .bp 再改。后缀不是 .bp 的文件不会被自动扫描
+; @patch name=<引擎>-<问题> desc=<一句话说明>
+; @match exe=game.exe size=<字节数> crc32=<全文件CRC32> engine=krkr2
+; 地址 RVA：原始字节 -> 补丁字节（原始字节对不上就跳过这条）
+0x12345 : 8B 45 FC -> 33 C0 90

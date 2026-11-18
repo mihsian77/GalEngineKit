@@ -170,15 +170,24 @@ CloneSource = fonts\SourceCJK.ttf   ; 单体 TTF/OTF，TTC 需先抽单 face
 
 ### 静态补丁格式
 
-补丁文件（`.bp`）每行一条规则：
+补丁文件（`.bp`）每行一条规则，文件头可以带匹配条件：
 
-```
-; 注释
-<地址> : <原始字节> -> <补丁字节>
+```bp
+; @patch name=krkr2-xxx desc=一句话说明
+; @match exe=game.exe size=123456 crc32=89ABCDEF engine=krkr2
+0x12345 : 8B 45 FC -> 33 C0 90
 ```
 
 - 地址: `0x12345`（RVA）或 `module.exe:0x12345`
 - 字节: 空格分隔的十六进制
+- `@match` 条件：`exe` / `size` / `crc32` / `engine`，可只写其中几项。**带条件的补丁放进 `patches/` 会被自动选中**（`[Patch] AutoScan = 1`，默认开）；没有条件的补丁只在 ini 里手动列时生效
+- 原始字节对不上时该条跳过，不会硬写
+
+```ini
+[Patch]
+AutoScan = 1
+PatchDir = patches
+```
 
 示例：
 ```bp

@@ -52,6 +52,13 @@ struct PatchRule {
 struct PatchFile {
     std::wstring path;
     std::wstring description;
+    std::wstring name;                    // @patch name=
+    // 匹配条件（来自 ; @match 注释行）。全空表示无条件，仅供手动列出使用
+    std::wstring match_exe;               // 目标 exe 文件名（不含路径）
+    uint64_t     match_size = 0;          // 0 = 不校验
+    uint32_t     match_crc32 = 0;         // 0 = 不校验
+    std::wstring match_engine;            // 引擎标识，如 krkr2
+    bool         has_match = false;
     std::vector<PatchRule> rules;
 };
 
@@ -71,6 +78,8 @@ struct LauncherConfig {
 
     // [Patch]
     std::vector<PatchFile> patch_files;
+    bool auto_scan_patches = true;        // 自动扫描补丁目录
+    std::wstring patch_dir = L"patches";  // 相对工作目录
 
     // [Environment]
     std::vector<std::pair<std::wstring, std::wstring>> environment_vars;

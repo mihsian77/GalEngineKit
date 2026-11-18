@@ -16,6 +16,10 @@ public:
     // 校验配置合法性（规格文档 3.2 节）
     static ResultCode Validate(const LauncherConfig& config);
 
+    // 解析单个 .bp 补丁文件（含 ; @match 匹配条件）。补丁库扫描也走这里，
+    // 保证手动列出与自动匹配用同一套解析规则。
+    static bool LoadPatchFile(const std::wstring& path, PatchFile& out_patch);
+
 private:
     // 读取 INI 字符串
     static std::wstring ReadString(HANDLE file_handle, const wchar_t* section,

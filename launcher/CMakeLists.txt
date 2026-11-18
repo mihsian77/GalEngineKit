@@ -18,6 +18,7 @@ set(SOURCES
     src/pe.cpp
     src/injector.cpp
     src/patcher.cpp
+    src/patch_library.cpp
     src/launcher.cpp
     src/engine_detector.cpp
     resources/galenginekit.rc
@@ -76,3 +77,15 @@ message(STATUS "  编译器: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "  架构: ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "  构建类型: ${CMAKE_BUILD_TYPE}")
 message(STATUS "========================================")
+
+# ---- 单元测试（默认不构建）----
+option(GEK_BUILD_TESTS "构建 launcher 单元测试" OFF)
+if(GEK_BUILD_TESTS)
+    add_executable(test_patch_library
+        tests/test_patch_library.cpp
+        src/patch_library.cpp
+        src/config.cpp
+        src/logger.cpp
+    )
+    target_link_libraries(test_patch_library PRIVATE user32)
+endif()

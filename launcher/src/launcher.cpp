@@ -6,6 +6,8 @@
 #include "ge_process.h"
 #include "ge_environment.h"
 #include "ge_patcher.h"
+#include "ge_patch_library.h"
+#include "ge_engine_detector.h"
 #include "ge_injector.h"
 #include "ge_logger.h"
 
@@ -109,14 +111,57 @@ ResultCode Launcher::Stage_CreateProcess(const LauncherConfig& config,
 }
 
 ResultCode Launcher::Stage_ApplyPatches(const LauncherConfig& config, ProcessInfo& process) {
-    if (config.patch_files.empty()) {
+    std::vector<PatchFile> patches = config.patch_files;
+
+    // 自动扫描补丁目录：按目标 exe 指纹筛选，补丁本身带 @match 条件才参与
+    if (config.auto_scan_patches) {
+        std::wstring exe = config.target_exe;
+        if (exe.find(L'\\') == std::wstring::npos && exe.find(L'/') == std::wstring::npos) {
+            std::wstring dir = config.working_dir.empty() ? L"." : config.working_dir;
+            exe = dir + L"\\" + exe;
+        }
+
+        std::wstring engine;
+        if (!config.working_dir.empty()) {
+            EngineDetectionResult det = EngineDetector::Detect(config.working_dir);
+            if (!det.engine_id.empty() && det.confidence > 0) engine = det.engine_id;
+        }
+
+        PatchTarget target = PatchLibrary::BuildTarget(exe, engine);
+        GE_LOG_INFO(L"[阶段 2/5] 补丁自动扫描: exe=" + target.exe_name +
+                    L" size=" + std::to_wstring(target.size) +
+                    L" engine=" + (engine.empty() ? L"(未识别)" : engine));
+
+        std::wstring dir = config.patch_dir;
+        if (!dir.empty() && dir[0] != L'/' && dir[0] != L'\\' &&
+            !(dir.size() > 1 && dir[1] == L':')) {
+            std::wstring base = config.working_dir.empty() ? L"." : config.working_dir;
+            dir = base + L"\\" + dir;
+        }
+
+        int scanned = 0;
+        std::vector<PatchFile> found = PatchLibrary::Collect(dir, target, &scanned);
+        GE_LOG_INFO(L"[阶段 2/5] 扫描 " + std::to_wstring(scanned) +
+                    L" 个补丁文件，命中 " + std::to_wstring(found.size()) + L" 个");
+
+        // 与手动列表合并，按路径去重（自动命中的优先，路径相同只留一份）
+        for (const auto& pf : found) {
+            bool dup = false;
+            for (const auto& exist : patches) {
+                if (exist.path == pf.path) { dup = true; break; }
+            }
+            if (!dup) patches.push_back(pf);
+        }
+    }
+
+    if (patches.empty()) {
         GE_LOG_INFO(L"[阶段 2/5] 无补丁需要应用，跳过");
         return ResultCode::Success;
     }
 
     GE_LOG_INFO(L"[阶段 2/5] 应用静态字节补丁");
     return MemoryPatcher::ApplyAll(process.process_handle, process.process_id,
-        config.patch_files, true);
+        patches, true);
 }
 
 ResultCode Launcher::Stage_InjectDlls(const LauncherConfig& config, ProcessInfo& process) {

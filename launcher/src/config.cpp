@@ -8,8 +8,50 @@
 #include <algorithm>
 #include <cctype>
 #include <map>
+#include <cstdlib>
+#include <string>
 
 namespace ge {
+
+// 解析补丁元数据注释：; @patch name=xx desc=xx / ; @match exe=xx size=xx crc32=xx engine=xx
+// 只认注释行，不影响老补丁文件（没有元数据就是无条件补丁）
+static void ParsePatchMeta(const std::string& raw, PatchFile& pf) {
+    size_t at = raw.find('@');
+    if (at == std::string::npos) return;
+    std::string body = raw.substr(at + 1);
+
+    size_t sp = body.find_first_of(" \t");
+    std::string cmd = (sp == std::string::npos) ? body : body.substr(0, sp);
+    std::string args = (sp == std::string::npos) ? std::string() : body.substr(sp + 1);
+
+    auto get = [&](const char* key) -> std::string {
+        std::string k = std::string(key) + "=";
+        size_t pos = args.find(k);
+        if (pos == std::string::npos) return std::string();
+        size_t v0 = pos + k.size();
+        size_t v1 = args.find_first_of(" \t,", v0);
+        return args.substr(v0, (v1 == std::string::npos ? args.size() : v1) - v0);
+    };
+
+    if (cmd == "patch") {
+        std::string n = get("name"); if (!n.empty()) pf.name = Utf8ToWide(n);
+        std::string d = get("desc"); if (!d.empty()) pf.description = Utf8ToWide(d);
+        return;
+    }
+    if (cmd == "match") {
+        pf.has_match = true;
+        std::string exe = get("exe");
+        if (!exe.empty()) pf.match_exe = Utf8ToWide(exe);
+        std::string engine = get("engine");
+        if (!engine.empty()) pf.match_engine = Utf8ToWide(engine);
+        std::string size = get("size");
+        if (!size.empty()) {
+            try { pf.match_size = std::stoull(size); } catch (...) {}
+        }
+        std::string crc = get("crc32");
+        if (!crc.empty()) pf.match_crc32 = (uint32_t)std::strtoul(crc.c_str(), nullptr, 16);
+    }
+}
 
 // 简易 INI 解析器（不依赖 GetPrivateProfileString，便于跨平台和错误定位）
 class SimpleIniParser {
@@ -142,6 +184,8 @@ ResultCode ConfigLoader::LoadFromFile(const std::wstring& config_path, LauncherC
     out.timeout_ms = (uint32_t)ini.GetInt("Inject", "TimeoutMs", 15000);
 
     // [Patch]
+    out.auto_scan_patches = (ini.GetInt("Patch", "AutoScan", 1) != 0);
+    out.patch_dir = ini.GetString("Patch", "PatchDir", L"patches");
     int patch_count = ini.GetInt("Patch", "PatchCount", 0);
     for (int i = 0; i < patch_count; i++) {
         std::string file_key = "Patch_" + std::to_string(i) + "_File";
@@ -152,7 +196,7 @@ ResultCode ConfigLoader::LoadFromFile(const std::wstring& config_path, LauncherC
         PatchFile pf;
         pf.path = patch_path;
         pf.description = ini.GetString("Patch", desc_key, L"");
-        if (ParsePatchFile(patch_path, pf)) {
+        if (LoadPatchFile(patch_path, pf)) {
             out.patch_files.push_back(pf);
         } else {
             GE_LOG_WARN(L"补丁文件解析失败，跳过: " + patch_path);
@@ -221,7 +265,7 @@ ResultCode ConfigLoader::Validate(const LauncherConfig& config) {
     return ResultCode::Success;
 }
 
-bool ConfigLoader::ParsePatchFile(const std::wstring& path, PatchFile& out_patch) {
+bool ConfigLoader::LoadPatchFile(const std::wstring& path, PatchFile& out_patch) {
     std::ifstream file(WideToUtf8(path), std::ios::binary);
     if (!file.is_open()) return false;
 
@@ -242,7 +286,11 @@ bool ConfigLoader::ParsePatchFile(const std::wstring& path, PatchFile& out_patch
         size_t end = line.find_last_not_of(" \t");
         if (end != std::string::npos) line = line.substr(0, end + 1);
 
-        if (line.empty() || line[0] == ';' || line[0] == '#') continue;
+        if (!line.empty() && (line[0] == ';' || line[0] == '#')) {
+            ParsePatchMeta(line, out_patch);
+            continue;
+        }
+        if (line.empty()) continue;
 
         PatchRule rule;
         if (ParsePatchLine(line, rule)) {
