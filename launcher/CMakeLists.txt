@@ -25,6 +25,7 @@ set(SOURCES
     src/pe_file.cpp
     src/game_dir.cpp
     src/deploy.cpp
+    src/hook_report.cpp
     resources/galenginekit.rc
 )
 

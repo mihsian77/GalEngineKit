@@ -234,8 +234,14 @@ int Doctor::Run(const std::wstring& game_dir, const std::wstring& report_path) {
     r.Section(L"引擎识别");
     EngineDetectionResult det = EngineDetector::Detect(dir);
     if (det.found) {
-        r.Pass(L"识别为 " + det.engine_name + L"（" + det.engine_id +
-               L"，置信度 " + std::to_wstring(det.confidence) + L"%）");
+        if (det.confidence < 50) {
+            r.Warn(std::wstring(L"疑似 ") + det.engine_name + L"（" + det.engine_id +
+                   L"，置信度仅 " + std::to_wstring(det.confidence) +
+                   L"%。依据只有文件名这类弱特征时容易认错，别当成确定结论");
+        } else {
+            r.Pass(std::wstring(L"识别为 ") + det.engine_name + L"（" + det.engine_id +
+                   L"，置信度 " + std::to_wstring(det.confidence) + L"%）");
+        }
         for (const auto& e : det.evidence) r.Info(L"依据: " + e);
     } else {
         r.Warn(L"未识别到已知引擎。此时不会自动匹配引擎钩子，字体问题需要手动配");

@@ -191,6 +191,32 @@ jobs:
         if [ $RC2 -ne 0 ]; then echo "字体克隆测试退出码 $RC2"; exit 1; fi
         grep -q "全部通过" /tmp/t-clone.log
 
+    - name: 日志回读冒烟（--report）
+      run: |
+        FIX=/tmp/report-fixture
+        rm -rf $FIX && mkdir -p $FIX
+        cat > $FIX/galenginekit_hook.log <<'LOG'
+        [krkr2_hook] 配置加载完成
+        [krkr2_hook] GetProcAddress 钩子安装成功（创建 + 身份查询 + 删除）
+        [krkr2_hook] CreateFontIndirectW: 'MS Gothic' -> 'Droid Sans Fallback'
+        [krkr2_hook] CreateFontW: 'MS Mincho' -> 'Droid Sans Fallback'
+        LOG
+        set +e
+        xvfb-run -a wine ${{ github.workspace }}/build/launcher/bin/GalEngineKitLauncher.exe --report $FIX > /tmp/report.log 2>&1
+        RC=$?
+        set -e
+        echo "== report exit=$RC =="; cat /tmp/report.log
+        if [ $RC -ne 0 ]; then echo "report 失败"; exit 1; fi
+        grep -q "命中 2 次" /tmp/report.log || { echo "没数出替换次数"; exit 1; }
+
+        rm -rf $FIX && mkdir -p $FIX
+        set +e
+        xvfb-run -a wine ${{ github.workspace }}/build/launcher/bin/GalEngineKitLauncher.exe --report $FIX > /tmp/report2.log 2>&1
+        RC=$?
+        set -e
+        echo "== report(无日志) exit=$RC =="; cat /tmp/report2.log
+        if [ $RC -ne 2 ]; then echo "没有日志时应返回 2"; exit 1; fi
+
     - name: 体检冒烟（--doctor）
       env:
         WINEPREFIX: ${{ github.workspace }}/.wine-gek

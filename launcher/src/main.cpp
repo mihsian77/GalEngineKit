@@ -8,6 +8,7 @@
 #include "ge_engine_detector.h"
 #include "ge_doctor.h"
 #include "ge_deploy.h"
+#include "ge_hook_report.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <string>
@@ -33,6 +34,7 @@ static void PrintUsage() {
         L"                      不给目录就用当前目录，结果同时写入 doctor.txt\n"
         L"  --deploy [目录]     部署钩子 dll 到游戏目录，原文件改名备份，写部署记录\n"
         L"  --undeploy [目录]   按部署记录还原，再删掉记录\n"
+        L"  --report [目录]     读钩子日志，给出'钩子装没装上、替换了几次'的结论\n"
         L"\n"
         L"示例:\n"
         L"  GalEngineKitLauncher.exe\n"
@@ -201,6 +203,7 @@ int main(int argc, char* argv[]) {
     bool doctor_mode = false;
     bool deploy_mode = false;
     bool undeploy_mode = false;
+    bool report_mode = false;
     std::wstring doctor_dir;
     bool has_config = false;
     int exit_code = 0;
@@ -244,6 +247,11 @@ int main(int argc, char* argv[]) {
         }
         if (arg == L"--undeploy") {
             undeploy_mode = true;
+            if (i + 1 < wargc && wargv[i + 1][0] != L'-') doctor_dir = wargv[++i];
+            continue;
+        }
+        if (arg == L"--report") {
+            report_mode = true;
             if (i + 1 < wargc && wargv[i + 1][0] != L'-') doctor_dir = wargv[++i];
             continue;
         }
@@ -304,6 +312,23 @@ int main(int argc, char* argv[]) {
         exit_code = Deploy::Remove(doctor_dir);
         goto cleanup;
     }
+    if (report_mode) {
+        std::wstring dir = doctor_dir;
+        if (dir.empty()) {
+            wchar_t cwd[MAX_PATH];
+            GetCurrentDirectoryW(MAX_PATH, cwd);
+            dir = cwd;
+        }
+        std::wstring summary;
+        if (HookReport::Analyze(dir, summary)) {
+            GE_LOG_INFO(L"钩子结果: " + summary);
+            exit_code = 0;
+        } else {
+            GE_LOG_WARN(L"这个目录里没有 galenginekit_hook.log，钩子没加载过，或者 LogToFile 关掉了");
+            exit_code = 2;
+        }
+        goto cleanup;
+    }
 
     // 环境检测
     if (IsRunningUnderWine()) {
@@ -359,6 +384,15 @@ int main(int argc, char* argv[]) {
 
     // 执行启动流程
     exit_code = Launcher::Run(config, wait_for_exit);
+
+    // 等进程退出后回读钩子日志（--no-wait 模式下日志可能还没写完，不勉强）
+    if (exit_code == 0 && wait_for_exit) {
+        std::wstring game_dir = config.working_dir.empty() ? std::wstring(L".") : config.working_dir;
+        std::wstring summary;
+        if (HookReport::Analyze(game_dir, summary)) {
+            GE_LOG_INFO(L"钩子结果: " + summary);
+        }
+    }
 
     if (exit_code != 0) {
         GE_LOG_WARN(L"启动器以非零退出码结束: " + std::to_wstring(exit_code));
