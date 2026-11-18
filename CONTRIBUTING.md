@@ -70,3 +70,7 @@ python3 tools/validate_profile.py profiles/<你的档案>.json
 ## 行为准则
 
 参与本项目即表示你同意保持友善、尊重他人、专注于技术讨论。
+## 对外文案
+
+Release notes、README、使用说明、提交说明统一按 `docs/文案规范.md` 写。要点：
+写用途和用法在前，限制单独成节，未验证的内容明确标注，不写营销词和不必要的口语。
