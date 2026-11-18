@@ -1,9 +1,9 @@
 # GalEngineKit - 顶层 CMake 构建脚本
-# galgame 引擎适配与中文化工具箱
+# galgame 引擎适配工具
 # 独立实现，MIT 许可
 
 cmake_minimum_required(VERSION 3.15)
-project(GalEngineKit VERSION 0.1.0 LANGUAGES CXX)
+project(GalEngineKit VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
