@@ -321,8 +321,12 @@ GalEngineKit/
 ├── hooks/                       # 钩子 DLL 开发框架
 │   ├── include/ge_hook_api.h    # 统一钩子接口
 │   ├── src/example_hook.cpp     # 示例钩子
-│   ├── src/krkr2_hook.cpp       # KiriKiri2 字体钩子
+│   ├── src/krkr2_hook.cpp       # 拦截函数 + 钩子安装 + 导出
 │   ├── src/font_clone.cpp       # 内存字体克隆
+│   ├── src/font_policy.cpp      # 反向伪装注册表、字体探测
+│   ├── src/hook_config.cpp      # krkr2_font.ini 与日文字体名单
+│   ├── src/hook_log.cpp         # 日志
+│   ├── src/iat_hook.cpp         # PE 导入表替换
 │   ├── src/version_proxy.cpp    # version.dll 代理
 │   ├── tests/                   # 钩子回归测试
 │   └── CMakeLists.txt
