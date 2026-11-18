@@ -192,6 +192,9 @@ jobs:
         grep -q "全部通过" /tmp/t-clone.log
 
     - name: 日志回读冒烟（--report）
+      env:
+        WINEPREFIX: ${{ github.workspace }}/.wine-gek
+        WINEARCH: win32
       run: |
         FIX=/tmp/report-fixture
         rm -rf $FIX && mkdir -p $FIX

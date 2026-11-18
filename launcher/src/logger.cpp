@@ -121,7 +121,19 @@ void Logger::WriteToConsole(LogLevel level, const std::wstring& formatted) {
     }
 
     DWORD written;
-    WriteConsoleW(hConsole, formatted.c_str(), (DWORD)formatted.size(), &written, nullptr);
+    if (!WriteConsoleW(hConsole, formatted.c_str(), (DWORD)formatted.size(), &written, nullptr)) {
+        // 输出被重定向（管道、CI 日志采集）时 WriteConsoleW 会失败，
+        // 退回 UTF-8 写 stdout，否则日志在这些场景下整段丢失
+        int len = WideCharToMultiByte(CP_UTF8, 0, formatted.c_str(), (int)formatted.size(),
+                                      nullptr, 0, nullptr, nullptr);
+        if (len > 0) {
+            std::string utf8(len, '\0');
+            WideCharToMultiByte(CP_UTF8, 0, formatted.c_str(), (int)formatted.size(),
+                                &utf8[0], len, nullptr, nullptr);
+            fwrite(utf8.data(), 1, utf8.size(), stdout);
+            fflush(stdout);
+        }
+    }
 
     if (has_console) {
         SetConsoleTextAttribute(hConsole, csbi.wAttributes);
