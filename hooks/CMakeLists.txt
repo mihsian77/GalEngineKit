@@ -18,6 +18,7 @@ add_library(example_hook SHARED
 # KiriKiri2 字体钩子（注入形态：自带 DllMain + GEK 导出）
 add_library(krkr2_hook SHARED
     src/krkr2_hook.cpp
+    src/font_clone.cpp
 )
 target_compile_definitions(krkr2_hook PRIVATE GEK_KRKR2_STANDALONE)
 
@@ -26,6 +27,7 @@ target_compile_definitions(krkr2_hook PRIVATE GEK_KRKR2_STANDALONE)
 # 由 version_proxy.cpp 提供 DllMain。
 add_library(version_proxy SHARED
     src/krkr2_hook.cpp
+    src/font_clone.cpp
     src/version_proxy.cpp
 )
 set_target_properties(version_proxy PROPERTIES OUTPUT_NAME "version")

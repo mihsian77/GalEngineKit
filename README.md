@@ -154,6 +154,20 @@ PatchCount = 0
 
 完整配置说明见 `launcher/examples/GalEngineKit.ini.example`。
 
+### 字体克隆（容器缺日文字体时）
+
+Winlator 容器常没有日文字体，替换成中文字体后 GDI 会 fallback 到无 CJK 的替身，中文照样出不来。开克隆可以让钩子自己顶上：
+
+```ini
+[Font]
+CloneEnabled = 1
+CloneSource = fonts\SourceCJK.ttf   ; 单体 TTF/OTF，TTC 需先抽单 face
+```
+
+处理顺序：先探系统是否真有这个日文字体（按名建一次再反查实际字体名）——有就按原逻辑替换；缺就克隆，把源字体在内存里改成游戏请求的字体名（改 name 表 + 补 OS/2 CJK 码页位），`AddFontMemResourceEx` 注册进进程，不落盘、不改系统；克隆失败退回替换。
+
+实测（Wine）：源字体改名成 `MS Gothic` 后，游戏按原名取到字体且中日字形齐全。
+
 ### 静态补丁格式
 
 补丁文件（`.bp`）每行一条规则：

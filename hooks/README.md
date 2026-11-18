@@ -66,6 +66,39 @@ DLLCount = 1
 DLL_0 = hooks/your_hook.dll
 ```
 
+### krkr2 字体钩子配置
+
+钩子读取游戏目录下的 `krkr2_font.ini`（找不到就用默认值），示例见
+`examples/krkr2_font.ini.example`：
+
+```ini
+[Font]
+Enabled = 1
+TargetFont = Microsoft YaHei
+ReplaceCharset = 1
+TargetCharset = 134
+; 克隆：系统缺该日文字体时，用源字体改名顶上
+CloneEnabled = 0
+CloneSource = fonts\SourceCJK.ttf
+```
+
+字体处理顺序：
+
+1. 按原名探一次字体，反查实际字体名——一致说明系统真有，直接替换成
+   `TargetFont`（V1-A 行为）。
+2. 缺字体且 `CloneEnabled=1` 时，把 `CloneSource` 指定的单体 CJK 字体改名成
+   游戏请求的名字，`AddFontMemResourceEx` 注册进进程，游戏按原名就能拿到中日
+   字形。不落盘、不改系统。
+3. 克隆失败（源文件缺失、TTC 集合、字体非法）退回替换路径。
+
+`CloneSource` 只支持单体 TTF/OTF，TTC 集合要先抽单个 face：
+
+```bash
+python3 -c "from fontTools.ttLib import TTCollection; c=TTCollection('Source.ttc'); c.fonts[2].save('Source.ttf')"
+```
+
+不改名直接塞 TTC 给 GDI 会失败——`AddFontMemResourceEx` 不认集合。
+
 ## 示例钩子
 
 `example_hook.dll` 是一个最小示例，仅用于验证启动器注入链路：

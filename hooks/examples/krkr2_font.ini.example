@@ -1,0 +1,20 @@
+; GalEngineKit krkr2 字体钩子配置示例
+; 放到游戏目录，文件名必须是 krkr2_font.ini
+[Font]
+Enabled = 1
+
+; 替换目标：系统里已有的中文字体
+TargetFont = Microsoft YaHei
+
+; 替换时同步改字符集（日文 Shift-JIS 128 -> GB2312 134）
+ReplaceCharset = 1
+TargetCharset = 134
+
+; 日志
+LogPath = galenginekit_hook.log
+LogToFile = 1
+
+; 克隆：系统缺该日文字体时，用源字体改名顶上，游戏按原名即可拿到中日字形
+; 源必须是单体 TTF/OTF；TTC 集合要先抽单个 face
+CloneEnabled = 0
+CloneSource = fonts\SourceCJK.ttf

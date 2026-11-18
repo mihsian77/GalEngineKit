@@ -26,6 +26,7 @@
 //     （mapPrerenderedFont / TFT）未处理，留待后续引擎级钩子。
 
 #include "ge_hook_api.h"
+#include "font_clone.h"
 #include <windows.h>
 #include <stdio.h>
 #include <string.h>
@@ -38,6 +39,9 @@ static bool g_logToFile = true;
 static wchar_t g_logPath[MAX_PATH] = L"galenginekit_hook.log";
 static bool g_replaceCharset = true;
 static BYTE g_targetCharset = GB2312_CHARSET;   // 134
+// V1-B 克隆：系统缺该日文字体时，用源 CJK 字体改名后内存注册顶上
+static bool g_cloneEnabled = false;
+static wchar_t g_cloneSource[MAX_PATH] = L"";
 
 // 日文字体黑名单（精确匹配，命中即替换）
 static const wchar_t* const g_jpBlacklist[] = {
@@ -166,6 +170,23 @@ static void LoadConfig() {
     g_replaceCharset = (GetPrivateProfileIntW(L"Font", L"ReplaceCharset", 1, iniPath) != 0);
     g_targetCharset = (BYTE)GetPrivateProfileIntW(L"Font", L"TargetCharset",
                                                   GB2312_CHARSET, iniPath);
+    g_cloneEnabled = (GetPrivateProfileIntW(L"Font", L"CloneEnabled", 0, iniPath) != 0);
+    GetPrivateProfileStringW(L"Font", L"CloneSource", L"", g_cloneSource,
+                             MAX_PATH, iniPath);
+    // 相对路径以模块（游戏）目录为基准
+    if (g_cloneSource[0] && g_cloneSource[0] != L'/' && g_cloneSource[0] != L'\\'
+        && !(g_cloneSource[0] && g_cloneSource[1] == L':')) {
+        wchar_t base[MAX_PATH];
+        GetModuleFileNameW(NULL, base, MAX_PATH);
+        wchar_t* slash = wcsrchr(base, L'\\');
+        if (slash) {
+            wchar_t rel[MAX_PATH];
+            wcsncpy(rel, g_cloneSource, MAX_PATH - 1); rel[MAX_PATH - 1] = 0;
+            *(slash + 1) = 0;
+            wcscat(base, rel);
+            wcsncpy(g_cloneSource, base, MAX_PATH - 1); g_cloneSource[MAX_PATH - 1] = 0;
+        }
+    }
 
     HookLog(L"配置加载完成: 目标字体='%s' charset=%d enabled=%d log=%d",
             g_targetFont, (int)g_targetCharset, g_enabled, g_logToFile);
@@ -180,10 +201,67 @@ static bool IsJapaneseFont(const wchar_t* faceName) {
     return false;
 }
 
+// ===== V1-B 克隆：存在性探测 + 按需注册 =====
+enum { FS_UNKNOWN = 0, FS_EXISTS = 1, FS_MISSING = 2 };
+typedef struct { wchar_t name[LF_FACESIZE]; int state; } FontState;
+static FontState g_fontStates[16];
+static int g_fontStateCount = 0;
+
+// 探测系统是否真有该字体：按原名建一次字体，反查实际字体名是否一致。
+// 结果按名字缓存，避免每次请求都建字体。
+static int ProbeFontExists(const wchar_t* faceName) {
+    for (int i = 0; i < g_fontStateCount; i++) {
+        if (_wcsicmp(g_fontStates[i].name, faceName) == 0) return g_fontStates[i].state;
+    }
+    int state = FS_MISSING;
+    if (g_origCreateFontIndirectW && g_origGetTextFaceW) {
+        LOGFONTW lf = {};
+        lf.lfHeight = -20;
+        lf.lfCharSet = DEFAULT_CHARSET;
+        wcsncpy(lf.lfFaceName, faceName, LF_FACESIZE - 1);
+        HFONT f = g_origCreateFontIndirectW(&lf);
+        if (f) {
+            HDC dc = GetDC(NULL);
+            HFONT old = (HFONT)SelectObject(dc, f);
+            wchar_t actual[LF_FACESIZE] = {};
+            g_origGetTextFaceW(dc, LF_FACESIZE, actual);
+            SelectObject(dc, old);
+            ReleaseDC(NULL, dc);
+            DeleteObject(f);
+            state = (_wcsicmp(actual, faceName) == 0) ? FS_EXISTS : FS_MISSING;
+        }
+    }
+    if (g_fontStateCount < 16) {
+        wcsncpy(g_fontStates[g_fontStateCount].name, faceName, LF_FACESIZE - 1);
+        g_fontStates[g_fontStateCount].name[LF_FACESIZE - 1] = 0;
+        g_fontStates[g_fontStateCount].state = state;
+        g_fontStateCount++;
+    }
+    return state;
+}
+
+// 按需把源字体改名为该日文字体名并注册；失败返回 false，调用方退回替换路径
+static bool CloneEnsure(const wchar_t* faceName) {
+    if (!g_cloneEnabled || !g_cloneSource[0]) return false;
+    if (FontCloneRegister(g_cloneSource, faceName)) {
+        HookLog(L"克隆字体已注册: '%s' <- %s", faceName, g_cloneSource);
+        return true;
+    }
+    HookLog(L"克隆失败: '%s'，源=%s（退回替换路径）", faceName, g_cloneSource);
+    return false;
+}
+
 // ===== 钩子替换函数 =====
 static HFONT WINAPI HookCreateFontIndirectW(const LOGFONTW* lf) {
     if (g_enabled && lf && lf->lfFaceName[0] && IsJapaneseFont(lf->lfFaceName)) {
         LOGFONTW orig = *lf;                 // 保留原始请求，供反向伪装
+        // V1-B：系统缺这个日文字体时，先克隆顶上（按原名创建，不做替换）
+        if (ProbeFontExists(lf->lfFaceName) == FS_MISSING && CloneEnsure(lf->lfFaceName)) {
+            HFONT h = g_origCreateFontIndirectW(lf);
+            RegisterFont(h, &orig);
+            HookLog(L"CreateFontIndirectW: '%s' 系统缺失，克隆字体命中", lf->lfFaceName);
+            return h;
+        }
         LOGFONTW newLf = *lf;
         wcsncpy(newLf.lfFaceName, g_targetFont, LF_FACESIZE - 1);
         newLf.lfFaceName[LF_FACESIZE - 1] = L'\0';
@@ -204,6 +282,24 @@ static HFONT WINAPI HookCreateFontW(int cHeight, int cWidth, int cEscapement, in
                                     DWORD iClipPrecision, DWORD iQuality, DWORD iPitchAndFamily,
                                     LPCWSTR pszFaceName) {
     if (g_enabled && pszFaceName && IsJapaneseFont(pszFaceName)) {
+        // V1-B：系统缺这个日文字体时，先克隆顶上（按原名创建，不做替换）
+        if (ProbeFontExists(pszFaceName) == FS_MISSING && CloneEnsure(pszFaceName)) {
+            LOGFONTW orig = {};
+            orig.lfHeight = cHeight; orig.lfWidth = cWidth;
+            orig.lfEscapement = cEscapement; orig.lfOrientation = cOrientation;
+            orig.lfWeight = (LONG)cWeight;
+            orig.lfItalic = (BYTE)bItalic; orig.lfUnderline = (BYTE)bUnderline;
+            orig.lfStrikeOut = (BYTE)bStrikeOut; orig.lfCharSet = (BYTE)iCharSet;
+            orig.lfOutPrecision = (BYTE)iOutPrecision; orig.lfClipPrecision = (BYTE)iClipPrecision;
+            orig.lfQuality = (BYTE)iQuality; orig.lfPitchAndFamily = (BYTE)iPitchAndFamily;
+            wcsncpy(orig.lfFaceName, pszFaceName, LF_FACESIZE - 1);
+            HFONT h = g_origCreateFontW(cHeight, cWidth, cEscapement, cOrientation, cWeight,
+                                        bItalic, bUnderline, bStrikeOut, iCharSet, iOutPrecision,
+                                        iClipPrecision, iQuality, iPitchAndFamily, pszFaceName);
+            RegisterFont(h, &orig);
+            HookLog(L"CreateFontW: '%s' 系统缺失，克隆字体命中", pszFaceName);
+            return h;
+        }
         LOGFONTW orig = {};
         orig.lfHeight = cHeight; orig.lfWidth = cWidth;
         orig.lfEscapement = cEscapement; orig.lfOrientation = cOrientation;
