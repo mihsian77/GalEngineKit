@@ -130,21 +130,26 @@ jobs:
         xvfb-run -a wineboot -i || true
         sleep 3
 
-    - name: 补丁库单测
+    - name: 跑回归测试
       env:
         WINEPREFIX: ${{ github.workspace }}/.wine-gek
         WINEARCH: win32
-        WINEDEBUG: -all
       run: |
-        xvfb-run -a wine build/launcher/test_patch_library.exe 2>&1 | tee /tmp/t-patch.log
-        grep -q "全部通过" /tmp/t-patch.log
+        wine --version || true
+        ls -la build/launcher/test_patch_library.exe build/hooks/bin/test_font_clone.exe
 
-    - name: 字体克隆单测
-      env:
-        WINEPREFIX: ${{ github.workspace }}/.wine-gek
-        WINEARCH: win32
-        WINEDEBUG: -all
-      run: |
+        set +e
+        xvfb-run -a wine build/launcher/test_patch_library.exe > /tmp/t-patch.log 2>&1
+        RC1=$?
+        echo "== 补丁库 exit=$RC1 =="; cat /tmp/t-patch.log
+        set -e
+
+        set +e
         FONT=$(ls /usr/share/fonts/truetype/droid/*.ttf | head -1)
-        xvfb-run -a wine build/hooks/bin/test_font_clone.exe "Z:$FONT" 2>&1 | tee /tmp/t-clone.log
-        grep -q "全部通过" /tmp/t-clone.log
+        xvfb-run -a wine build/hooks/bin/test_font_clone.exe "Z:$FONT" > /tmp/t-clone.log 2>&1
+        RC2=$?
+        echo "== 字体克隆 exit=$RC2 =="; cat /tmp/t-clone.log
+        set -e
+
+        [ $RC1 -eq 0 ] && grep -q "全部通过" /tmp/t-patch.log
+        [ $RC2 -eq 0 ] && grep -q "全部通过" /tmp/t-clone.log
