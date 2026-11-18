@@ -2,7 +2,7 @@
 # 独立实现，MIT 许可
 
 cmake_minimum_required(VERSION 3.15)
-project(GalEngineKitLauncher VERSION 0.2.0 LANGUAGES CXX RC)
+project(GalEngineKitLauncher VERSION 0.1.0 LANGUAGES CXX RC)
 
 # C++ 标准
 set(CMAKE_CXX_STANDARD 17)

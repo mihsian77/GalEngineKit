@@ -45,7 +45,7 @@ static void PrintUsage() {
 
 static void PrintVersion() {
     const wchar_t* version =
-        L"GalEngineKit Launcher v0.2.0\n"
+        L"GalEngineKit Launcher v0.1.0\n"
         L"独立实现，MIT 许可\n"
         L"参考: Detours (MIT), SimpleFontHook (功能规格), VN_Localization_Tutorials (功能规格)\n";
     WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), version, (DWORD)wcslen(version), nullptr, nullptr);
@@ -294,7 +294,7 @@ int main(int argc, char* argv[]) {
     // 初始化日志文件（在当前目录的 logs/ 下）
     logger.InitFile(L"logs");
 
-    GE_LOG_INFO(L"GalEngineKit Launcher v0.2.0 启动");
+    GE_LOG_INFO(L"GalEngineKit Launcher v0.1.0 启动");
     GE_LOG_INFO(L"配置文件: " + config_path);
     GE_LOG_INFO(L"日志级别: " + std::to_wstring((int)log_level));
 

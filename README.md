@@ -64,8 +64,8 @@
 
 从 [Releases](https://github.com/mihsian77/GalEngineKit/releases) 下载：
 
-- `GalEngineKit-v0.2.0-32bit.zip` — 32 位游戏用，老 galgame 大多是这种
-- `GalEngineKit-v0.2.0-64bit.zip` — 64 位游戏用
+- `GalEngineKit-v0.1.0-32bit.zip` — 32 位游戏用，老 galgame 大多是这种
+- `GalEngineKit-v0.1.0-64bit.zip` — 64 位游戏用
 
 每个包里是同一套、位数不同：启动器、字体钩子（注入形态）、字体钩子的代理形态
 （`version-*.dll`，改名 `version.dll` 用）、示例钩子、以及一份 `使用说明.txt`。
