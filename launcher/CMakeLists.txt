@@ -22,6 +22,9 @@ set(SOURCES
     src/launcher.cpp
     src/engine_detector.cpp
     src/doctor.cpp
+    src/pe_file.cpp
+    src/game_dir.cpp
+    src/deploy.cpp
     resources/galenginekit.rc
 )
 

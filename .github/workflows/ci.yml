@@ -130,6 +130,41 @@ jobs:
         xvfb-run -a wineboot -i || true
         sleep 3
 
+    - name: 部署冒烟（--deploy / --undeploy）
+      env:
+        WINEPREFIX: ${{ github.workspace }}/.wine-gek
+        WINEARCH: win32
+      run: |
+        FIX=/tmp/deploy-fixture
+        rm -rf $FIX && mkdir -p $FIX
+        cp build/launcher/bin/GalEngineKitLauncher.exe $FIX/game.exe
+        cp build/hooks/bin/krkr2_hook.dll $FIX/krkr2_hook-32bit.dll
+        cp build/hooks/bin/version.dll $FIX/version-32bit.dll
+        # 预置一个同名 version.dll，验证备份与还原
+        echo "notepad placeholder" > $FIX/version.dll
+        set +e
+        xvfb-run -a wine ${{ github.workspace }}/build/launcher/bin/GalEngineKitLauncher.exe --deploy $FIX > /tmp/deploy.log 2>&1
+        RC=$?
+        set -e
+        echo "== deploy exit=$RC =="; cat /tmp/deploy.log
+        if [ $RC -ne 0 ]; then echo "deploy 失败"; exit 1; fi
+        test -f $FIX/krkr2_hook.dll || { echo "缺 krkr2_hook.dll"; exit 1; }
+        test -f $FIX/version.dll || { echo "缺 version.dll"; exit 1; }
+        test -f $FIX/version.dll.gek-bak || { echo "原 version.dll 没备份"; exit 1; }
+        test -f $FIX/krkr2_font.ini || { echo "缺 krkr2_font.ini"; exit 1; }
+        test -f $FIX/.galenginekit-manifest.txt || { echo "缺部署记录"; exit 1; }
+
+        set +e
+        xvfb-run -a wine ${{ github.workspace }}/build/launcher/bin/GalEngineKitLauncher.exe --undeploy $FIX > /tmp/undeploy.log 2>&1
+        RC=$?
+        set -e
+        echo "== undeploy exit=$RC =="; cat /tmp/undeploy.log
+        if [ $RC -ne 0 ]; then echo "undeploy 失败"; exit 1; fi
+        test ! -f $FIX/krkr2_hook.dll || { echo "krkr2_hook.dll 没删掉"; exit 1; }
+        test ! -f $FIX/krkr2_font.ini || { echo "krkr2_font.ini 没删掉"; exit 1; }
+        grep -q "notepad placeholder" $FIX/version.dll || { echo "version.dll 没还原"; exit 1; }
+        test ! -f $FIX/.galenginekit-manifest.txt || { echo "部署记录没删"; exit 1; }
+
     - name: 跑回归测试
       env:
         WINEPREFIX: ${{ github.workspace }}/.wine-gek
@@ -152,6 +187,8 @@ jobs:
         FIX=/tmp/doctor-fixture
         rm -rf $FIX && mkdir -p $FIX
         cp build/launcher/bin/GalEngineKitLauncher.exe $FIX/game.exe
+        # 容器里没有雅黑，指定一个确实装了的字体，避免体检误报致命
+        printf '[Font]\r\nTargetFont=Droid Sans Fallback\r\n' > $FIX/krkr2_font.ini
         cd $FIX
         set +e
         xvfb-run -a wine ${{ github.workspace }}/build/launcher/bin/GalEngineKitLauncher.exe --doctor > /tmp/doctor.log 2>&1

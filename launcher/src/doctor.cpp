@@ -6,6 +6,8 @@
 #include "ge_config.h"
 #include "ge_engine_detector.h"
 #include "ge_patch_library.h"
+#include "ge_pe_file.h"
+#include "ge_game_dir.h"
 #include <windows.h>
 #include <string>
 #include <vector>
@@ -66,21 +68,6 @@ static bool WriteUtf8File(const std::wstring& path, const std::wstring& text) {
     return true;
 }
 
-static bool FileExists(const std::wstring& path) {
-    return GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES;
-}
-
-static std::wstring JoinPath(const std::wstring& dir, const std::wstring& name) {
-    if (name.empty()) return dir;
-    if (name[0] == L'\\' || name[0] == L'/') return name;
-    return dir + L"\\" + name;
-}
-
-static std::wstring Lower(std::wstring s) {
-    std::transform(s.begin(), s.end(), s.begin(), towlower);
-    return s;
-}
-
 static std::wstring Format(const wchar_t* fmt, ...) {
     wchar_t buf[512];
     va_list args;
@@ -89,60 +76,6 @@ static std::wstring Format(const wchar_t* fmt, ...) {
     va_end(args);
     buf[_countof(buf) - 1] = L'\0';
     return buf;
-}
-
-// ===== 文件级 PE 解析 =====
-// 注意：launcher/src/pe.cpp 里的 PeHelper 读的是目标进程内存，体检要在启动前
-// 直接读文件头，所以这里单独实现一小段，只取 Machine 和 Magic。
-struct PeInfo {
-    bool valid = false;
-    WORD machine = 0;
-    bool pe64 = false;
-    std::wstring error;
-};
-
-static PeInfo ReadPeFromFile(const std::wstring& path) {
-    PeInfo info;
-    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-                           OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE) {
-        info.error = L"打开文件失败";
-        return info;
-    }
-    unsigned char buf[1024] = {};
-    DWORD got = 0;
-    ReadFile(f, buf, sizeof(buf), &got, nullptr);
-    CloseHandle(f);
-
-    if (got < sizeof(IMAGE_DOS_HEADER)) {
-        info.error = L"文件太小，不是 PE";
-        return info;
-    }
-    IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)buf;
-    if (dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 ||
-        dos->e_lfanew + 24 >= (LONG)got) {
-        info.error = L"DOS 头无效，不是 PE";
-        return info;
-    }
-    IMAGE_NT_HEADERS32* nt = (IMAGE_NT_HEADERS32*)(buf + dos->e_lfanew);
-    if (nt->Signature != IMAGE_NT_SIGNATURE) {
-        info.error = L"NT 头签名无效";
-        return info;
-    }
-    info.valid = true;
-    info.machine = nt->FileHeader.Machine;
-    info.pe64 = (nt->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC);
-    return info;
-}
-
-static std::wstring MachineName(WORD machine) {
-    switch (machine) {
-        case IMAGE_FILE_MACHINE_I386:  return L"x86 (32 位)";
-        case IMAGE_FILE_MACHINE_AMD64: return L"x64 (64 位)";
-        case IMAGE_FILE_MACHINE_ARM64: return L"ARM64";
-        case IMAGE_FILE_MACHINE_ARMNT: return L"ARM (32 位)";
-        default: return Format(L"未知 (0x%04X)", machine);
-    }
 }
 
 // ===== 字体枚举 =====
@@ -260,32 +193,10 @@ int Doctor::Run(const std::wstring& game_dir, const std::wstring& report_path) {
     }
 
     if (exe_name.empty()) {
-        // 与智能模式同一套规则：跳过配置/安装/卸载类程序
-        WIN32_FIND_DATAW fd;
-        HANDLE h = FindFirstFileW(JoinPath(dir, L"*.exe").c_str(), &fd);
-        if (h != INVALID_HANDLE_VALUE) {
-            std::vector<std::wstring> candidates;
-            do {
-                if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-                std::wstring name = fd.cFileName;
-                if (_wcsicmp(name.c_str(), L"GalEngineKitLauncher.exe") == 0) continue;
-                candidates.push_back(name);
-            } while (FindNextFileW(h, &fd));
-            FindClose(h);
-            for (const auto& c : candidates) {
-                std::wstring low = Lower(c);
-                if (low.find(L"config") == std::wstring::npos &&
-                    low.find(L"setup") == std::wstring::npos &&
-                    low.find(L"unins") == std::wstring::npos &&
-                    low.find(L"tool") == std::wstring::npos) {
-                    exe_name = c;
-                    break;
-                }
-            }
-            if (exe_name.empty() && !candidates.empty()) exe_name = candidates[0];
-            if (candidates.size() > 1) {
-                r.Info(L"目录下有多个 exe，本次按规则选了 " + exe_name);
-            }
+        bool ambiguous = false;
+        exe_name = PickTargetExe(dir, &ambiguous);
+        if (ambiguous && !exe_name.empty()) {
+            r.Info(L"目录下有多个 exe，本次按规则选了 " + exe_name);
         }
     }
 
@@ -300,7 +211,7 @@ int Doctor::Run(const std::wstring& game_dir, const std::wstring& report_path) {
 
     // ===== 2. PE 位数 =====
     r.Section(L"程序位数");
-    PeInfo pe = ReadPeFromFile(exe_path);
+    FilePeInfo pe = ReadPeHeader(exe_path);
     if (!pe.valid) {
         r.Fail(L"读 PE 失败：" + pe.error + L"。这个 exe 可能被壳保护或已损坏");
     } else {
@@ -335,7 +246,7 @@ int Doctor::Run(const std::wstring& game_dir, const std::wstring& report_path) {
     std::wstring krkr_dll = JoinPath(dir, L"krkr2_hook.dll");
     std::wstring ver_dll = JoinPath(dir, L"version.dll");
     if (FileExists(krkr_dll)) {
-        PeInfo kp = ReadPeFromFile(krkr_dll);
+        FilePeInfo kp = ReadPeHeader(krkr_dll);
         if (kp.valid) {
             bool match = pe.valid && (kp.pe64 == pe.pe64);
             if (match) r.Pass(L"krkr2_hook.dll 存在，位数与目标一致");

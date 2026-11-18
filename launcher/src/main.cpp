@@ -7,6 +7,7 @@
 #include "ge_launcher.h"
 #include "ge_engine_detector.h"
 #include "ge_doctor.h"
+#include "ge_deploy.h"
 #include <windows.h>
 #include <shellapi.h>
 #include <string>
@@ -30,6 +31,8 @@ static void PrintUsage() {
         L"  --dry-run           仅校验配置，不实际启动进程\n"
         L"  --doctor [目录]     体检：不启动游戏，检查程序位数、引擎、字体、补丁、运行环境\n"
         L"                      不给目录就用当前目录，结果同时写入 doctor.txt\n"
+        L"  --deploy [目录]     部署钩子 dll 到游戏目录，原文件改名备份，写部署记录\n"
+        L"  --undeploy [目录]   按部署记录还原，再删掉记录\n"
         L"\n"
         L"示例:\n"
         L"  GalEngineKitLauncher.exe\n"
@@ -196,6 +199,8 @@ int main(int argc, char* argv[]) {
     bool wait_for_exit = true;
     bool dry_run = false;
     bool doctor_mode = false;
+    bool deploy_mode = false;
+    bool undeploy_mode = false;
     std::wstring doctor_dir;
     bool has_config = false;
     int exit_code = 0;
@@ -229,6 +234,16 @@ int main(int argc, char* argv[]) {
         if (arg == L"--doctor") {
             doctor_mode = true;
             // 可选目录参数；下一个参数以 - 开头就当没写
+            if (i + 1 < wargc && wargv[i + 1][0] != L'-') doctor_dir = wargv[++i];
+            continue;
+        }
+        if (arg == L"--deploy") {
+            deploy_mode = true;
+            if (i + 1 < wargc && wargv[i + 1][0] != L'-') doctor_dir = wargv[++i];
+            continue;
+        }
+        if (arg == L"--undeploy") {
+            undeploy_mode = true;
             if (i + 1 < wargc && wargv[i + 1][0] != L'-') doctor_dir = wargv[++i];
             continue;
         }
@@ -278,6 +293,15 @@ int main(int argc, char* argv[]) {
     // 体检模式：只查不启动
     if (doctor_mode) {
         exit_code = Doctor::Run(doctor_dir, L"doctor.txt");
+        goto cleanup;
+    }
+    // 部署 / 撤销部署：只碰游戏目录里的 dll 和部署记录
+    if (deploy_mode) {
+        exit_code = Deploy::Install(doctor_dir);
+        goto cleanup;
+    }
+    if (undeploy_mode) {
+        exit_code = Deploy::Remove(doctor_dir);
         goto cleanup;
     }
 
