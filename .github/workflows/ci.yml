@@ -6,6 +6,7 @@ on:
     paths:
       - 'launcher/**'
       - 'hooks/**'
+      - 'patches/**'
       - 'CMakeLists.txt'
       - '.github/workflows/ci.yml'
   pull_request:
@@ -83,3 +84,67 @@ jobs:
       with:
         name: example_hook-${{ matrix.bitness }}bit
         path: hooks/build/bin/example_hook.dll
+
+  # 回归测试：只跑不依赖系统字体的用例。
+  # test_font_hook / test_version_proxy 要求前缀里真有 "Microsoft YaHei"，
+  # 靠注册表造假绿没有意义，留在本地 Windows 环境跑；见 hooks/README.md
+  test-wine:
+    name: Tests (Wine 32-bit)
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: 装依赖
+      run: |
+        sudo dpkg --add-architecture i386
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          mingw-w64 cmake ninja-build xvfb wine wine32:i386 fonts-droid-fallback
+
+    - name: 构建（32 位，带测试）
+      run: |
+        cmake -B build/launcher -S launcher -G Ninja \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
+          -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ \
+          -DCMAKE_RC_COMPILER=i686-w64-mingw32-windres \
+          -DCMAKE_BUILD_TYPE=Release -DGEK_BUILD_TESTS=ON
+        cmake --build build/launcher --parallel
+
+        cmake -B build/hooks -S hooks -G Ninja \
+          -DCMAKE_SYSTEM_NAME=Windows \
+          -DCMAKE_C_COMPILER=i686-w64-mingw32-gcc \
+          -DCMAKE_CXX_COMPILER=i686-w64-mingw32-g++ \
+          -DCMAKE_RC_COMPILER=i686-w64-mingw32-windres \
+          -DCMAKE_BUILD_TYPE=Release -DGEK_BUILD_TESTS=ON
+        cmake --build build/hooks --parallel
+
+    - name: 初始化 Wine 前缀
+      env:
+        WINEPREFIX: ${{ github.workspace }}/.wine-gek
+        WINEARCH: win32
+        WINEDEBUG: -all
+        WINEDLLOVERRIDES: mscoree,mshtml=
+      run: |
+        xvfb-run -a wineboot -i || true
+        sleep 3
+
+    - name: 补丁库单测
+      env:
+        WINEPREFIX: ${{ github.workspace }}/.wine-gek
+        WINEARCH: win32
+        WINEDEBUG: -all
+      run: |
+        xvfb-run -a wine build/launcher/test_patch_library.exe 2>&1 | tee /tmp/t-patch.log
+        grep -q "全部通过" /tmp/t-patch.log
+
+    - name: 字体克隆单测
+      env:
+        WINEPREFIX: ${{ github.workspace }}/.wine-gek
+        WINEARCH: win32
+        WINEDEBUG: -all
+      run: |
+        FONT=$(ls /usr/share/fonts/truetype/droid/*.ttf | head -1)
+        xvfb-run -a wine build/hooks/bin/test_font_clone.exe "Z:$FONT" 2>&1 | tee /tmp/t-clone.log
+        grep -q "全部通过" /tmp/t-clone.log

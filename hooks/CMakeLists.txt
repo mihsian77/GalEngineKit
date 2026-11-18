@@ -69,3 +69,21 @@ install(TARGETS example_hook krkr2_hook version_proxy
 )
 
 message(STATUS "GalEngineKit Hooks v${PROJECT_VERSION}")
+# ---- 回归测试（默认不构建）----
+# test_font_clone 自带源字体入参，不依赖前缀里装没装字体；
+# 其余三个走 LoadLibrary 加载真实 DLL，运行前要准备游戏目录结构。
+option(GEK_BUILD_TESTS "构建 hooks 回归测试" OFF)
+if(GEK_BUILD_TESTS)
+    add_executable(test_font_clone tests/test_font_clone.cpp src/font_clone.cpp)
+    add_executable(test_font_hook tests/test_font_hook.cpp)
+    add_executable(test_version_proxy tests/test_version_proxy.cpp)
+    add_executable(test_font_clone_hook tests/test_font_clone_hook.cpp)
+
+    foreach(t test_font_clone test_font_hook test_version_proxy test_font_clone_hook)
+        target_link_libraries(${t} PRIVATE kernel32 user32 gdi32)
+        set_target_properties(${t} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+        if(MINGW)
+            target_link_options(${t} PRIVATE -static -static-libgcc -static-libstdc++)
+        endif()
+    endforeach()
+endif()
