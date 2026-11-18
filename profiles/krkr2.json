@@ -9,8 +9,8 @@
   },
   "text_rendering_path": "hybrid",
   "font_strategy": {
-    "recommended_approach": "wine_registry",
-    "notes": "KiriKiri 使用 GDI 字体创建，同时维护预渲染字体缓存（TFT）。GDI 路径可通过 Wine 字体注册表替换覆盖中文显示；预渲染缓存可能导致部分文字不更新，需引擎钩子配合清除或禁用 mapPrerenderedFont。"
+    "recommended_approach": "engine_hook",
+    "notes": "KiriKiri 走 GDI 创建字体，钩子替换 CJK 字体并改写 charset（128->134）；容器缺日文字体时用 font_clone 改名顶上。预渲染字体缓存（TFT / mapPrerenderedFont）尚未处理，开了缓存的游戏文字可能不跟着变。没装钩子时可用字体注册表替换作为退路。"
   },
   "hook_targets": [
     {
@@ -23,10 +23,10 @@
     "wine_version_hint": "Wine 7+ 均可",
     "dxvk": true,
     "single_threaded": false,
-    "font_registry_replacement": true,
-    "notes": "中文显示主要通过 Wine 字体注册表替换解决；部分游戏的预渲染字体可能导致文字显示异常，需引擎钩子配合处理。"
+    "font_registry_replacement": false,
+    "notes": "装 krkr2_hook.dll 或代理 version.dll 时走钩子；Wine 下代理形态需 WINEDLLOVERRIDES=\"version=n,b\"。"
   },
   "status": "verified",
   "references": ["KiriKiri 官方文档", "XP3 归档格式公开资料"],
-  "last_updated": "2026-09-28"
+  "last_updated": "2026-11-18"
 }

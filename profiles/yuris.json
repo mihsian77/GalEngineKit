@@ -36,7 +36,7 @@
     "font_registry_replacement": false,
     "notes": "Wine 字体注册表对本引擎无效。中文化依赖运行时钩子替换预渲染图集。部分游戏用 Enigma Virtual Box 打包，需在容器外或容器内先解包。YU-RIS 使用 Direct3D 渲染，建议开启 DXVK。版本识别：主程序属性详细信息中版本号 0.2xx 为老版本，0.4xx/0.5xx 为新版本。"
   },
-  "status": "verified",
+  "status": "draft",
   "references": ["GARbro ArcYPF.cs（YPF 归档格式公开实现）", "YurisTools（Dir-A，YU-RIS 数据工具集）", "YU-RIS 汉化教程（Dir-A，引擎逆向方法论）", "SimpleFontHook YU-RIS 适配器（功能规格参考，未复制代码）"],
-  "last_updated": "2026-09-28"
+  "last_updated": "2026-11-18"
 }

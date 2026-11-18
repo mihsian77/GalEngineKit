@@ -14,7 +14,7 @@
 - 扫描目录特征文件、归档格式、可执行文件名
 - 内置多种常见引擎识别规则（KiriKiri2 / YU-RIS / Ren'Py / Unity / Artemis / CatSystem2 / BGI / Majiro / Tyrano / RPG Maker VX Ace / RPG Maker MV）
 - 自动选择目标 exe（排除设置程序、卸载程序）
-- 自动匹配对应引擎的钩子 DLL（`hooks/<engine_id>_hook.dll`）
+- 自动匹配对应引擎的钩子 DLL（`hooks/<engine_id>_hook.dll`）；找不到就退回 `example_hook.dll`（只写一行日志验证注入，不做处理），目前只有 krkr2 有钩子
 - 生成配置并直接运行，**不需要写任何 ini 文件**
 
 有 `GalEngineKit.ini` 时自动切换到配置模式，向后兼容。
@@ -46,12 +46,14 @@
 
 | 环境 | 状态 | 说明 |
 |---|---|---|
-| Windows 7 / 8 / 10 / 11 | ✅ | 仅使用 Windows 2000+ API |
-| Wine (Linux/macOS) | ✅ | 自动检测 Wine 环境并输出版本 |
-| **Winlator (Android)** | ✅ | 核心目标平台，导入表注入针对 Box64/Box86 优化 |
-| CrossOver / Crossover | ✅ | 基于 Wine，兼容 |
+| Wine 6.x / 10.x (Linux) | ✅ 实测 | 注入、代理、字体克隆、补丁链路都在这上面跑过 |
+| Windows 7 / 8 / 10 / 11 | ⚠️ 未实测 | 代码只用 Windows 2000+ API，但没在真机跑过 |
+| **Winlator (Android)** | ⚠️ 未实测 | 设计目标就是它，导入表注入在进程执行前写内存，不碰已翻译代码；但没在真机容器里验证过 |
+| CrossOver | ⚠️ 未实测 | 基于 Wine，理论上同 Wine 分支 |
 
-启动时自动检测运行环境（原生 Windows / Wine），在日志中输出环境信息和适配提示。
+启动时自动检测运行环境（原生 Windows / Wine），在日志里输出环境信息和提示。
+
+上表的"未实测"不是客套：真实 Windows 加载器行为、Winlator 容器里的字体渲染都还没验过，别当成已支持。
 
 ---
 
@@ -63,7 +65,9 @@
 
 - `GalEngineKitLauncher-32bit.exe` — 32 位游戏用（大多数 galgame）
 - `GalEngineKitLauncher-64bit.exe` — 64 位游戏用
-- `example_hook-32bit.dll` / `example_hook-64bit.dll` — 示例钩子（验证注入链路用）
+- `example_hook-32bit.dll` / `example_hook-64bit.dll` — 示例钩子，只往日志里写一行证明注入通了，不做字体替换
+
+`krkr2_hook.dll`（注入形态）和代理 `version.dll` 目前不在 Release 里，从 CI 产物或源码编译取。
 
 ### 2. 使用（零配置）
 
@@ -80,30 +84,39 @@
 
 成功标志：
 - 游戏正常启动
-- 目录下生成 `galenginekit_hook.log`（示例钩子 DLL 加载成功）
+- 目录下生成 `galenginekit_hook.log`（钩子加载和替换记录都写这里；只跑示例钩子时只有加载记录）
 - `logs/` 目录下有启动器日志，包含引擎识别结果和环境信息
 
 ---
 
 ## 支持的引擎
 
-| 引擎 | 识别 ID | 状态 | 文本渲染 | 推荐方案 |
-|---|---|---|---|---|
-| KiriKiri2 / KAG | `krkr2` | ✅ verified | GDI+ | 引擎钩子 |
-| YU-RIS | `yuris` | ✅ verified | 位图字体图集 | 引擎钩子 |
-| Artemis Engine | `artemis` | 📝 draft | GDI | 引擎钩子 |
-| Ren'Py | `renpy` | 📝 draft | FreeType | 字体替换 |
-| Unity | `unity` | 📝 draft | 混合 | 引擎钩子 |
-| CatSystem2 | `catsystem2` | 📝 draft | GDI | 引擎钩子 |
-| BGI / Ethornell | `bgi` | 📝 draft | GDI | 引擎钩子 |
-| Majiro | `majiro` | 📝 draft | GDI | 引擎钩子 |
-| TyranoBuilder | `tyrano` | 📝 draft | Web 渲染 | 字体替换 |
-| RPG Maker VX Ace | `rpgmaker_vxa` | 📝 draft | GDI | 字体替换 |
-| RPG Maker MV/MZ | `rpgmaker_mv` | 📝 draft | Web 渲染 | 字体替换 |
+识别和实现是两件事，分开列：
 
-引擎档案位于 `profiles/` 目录，JSON 格式，包含识别特征、文本渲染路径、字体方案、钩子目标等信息。新增引擎只需添加一个 JSON 档案。
+| 引擎 | 识别 ID | 现成钩子 | 说明 |
+|---|---|---|---|
+| KiriKiri2 / KAG | `krkr2` | 注入 `krkr2_hook.dll` / 代理 `version.dll` | 字体替换、反向伪装、字体克隆都做了；Wine 上用样本 exe 验过钩子行为，真实游戏渲染没验 |
+| YU-RIS | `yuris` | 无 | 只有识别，钩子没做 |
+| Artemis | `artemis` | 无 | 只有识别 |
+| Ren'Py | `renpy` | 无 | 只有识别；这类通常是字体文件替换，不需要钩子 |
+| Unity | `unity` | 无 | 只有识别 |
+| CatSystem2 | `catsystem2` | 无 | 只有识别 |
+| BGI / Ethornell | `bgi` | 无 | 只有识别 |
+| Majiro | `majiro` | 无 | 只有识别 |
+| TyranoBuilder | `tyrano` | 无 | 只有识别 |
+| RPG Maker VX Ace | `rpgmaker_vxa` | 无 | 只有识别 |
+| RPG Maker MV/MZ | `rpgmaker_mv` | 无 | 只有识别 |
 
----
+识别规则是打分制，写在 `launcher/src/engine_detector.cpp`，看目录特征文件、归档格式和 exe 文件名。
+
+### 当前能力边界
+
+写清楚免得误判：
+
+- 字体钩子只有 KiriKiri2，走的是 GDI 字体创建路径。KiriKiri 的预渲染字体缓存（TFT / `mapPrerenderedFont`）没处理，开了缓存的游戏文字不一定跟着变
+- 注入形态和代理形态共用同一套钩子核心，能力上限一样
+- 静态补丁是通用能力，但仓库里没有真实游戏补丁。没有游戏本体造不出可信补丁，`patches/` 目前只有格式文档和模板，实际用要靠玩家/贡献者按自己手上的 exe 生成
+- Winlator 真机上的字体渲染没验证过，只在 Wine 上验过钩子行为和字形索引
 
 ## 高级用法
 
@@ -276,9 +289,11 @@ CI 里跑两项：补丁库单测（指纹、匹配条件、目录筛选）、�
 
 字体钩子和 `version.dll` 代理这两个测试没进 CI：它们断言要求前缀里真装着一个中文字体，在 CI 里靠注册表造一个假名字骗过断言没意义，只在本地 Windows 环境跑。代理那个还要 `WINEDLLOVERRIDES="version=n,b"`，否则 Wine 加载内置 version.dll，钩子根本不进来。
 
-### 添加引擎档案
+### 引擎档案（profiles/）
 
-在 `profiles/` 目录添加 `<engine_id>.json`，参考 `schemas/engine-profile.schema.json`。用 `tools/validate_profile.py` 校验：
+`profiles/` 是资料库，记识别特征、渲染路径和容器建议，供人查，也给以后把识别规则数据化留个底。**运行时识别不读这里**——改 JSON 不会让启动器多认出一个引擎，要加引擎得动 `launcher/src/engine_detector.cpp`。
+
+档案格式用 `schemas/engine-profile.schema.json` 校验：
 
 ```bash
 python3 tools/validate_profile.py profiles/new_engine.json
@@ -306,8 +321,13 @@ GalEngineKit/
 ├── hooks/                       # 钩子 DLL 开发框架
 │   ├── include/ge_hook_api.h    # 统一钩子接口
 │   ├── src/example_hook.cpp     # 示例钩子
+│   ├── src/krkr2_hook.cpp       # KiriKiri2 字体钩子
+│   ├── src/font_clone.cpp       # 内存字体克隆
+│   ├── src/version_proxy.cpp    # version.dll 代理
+│   ├── tests/                   # 钩子回归测试
 │   └── CMakeLists.txt
-├── profiles/                    # 引擎档案库（JSON）
+├── patches/                     # 静态补丁目录（格式说明 + 模板）
+├── profiles/                    # 引擎档案（资料，不参与运行时识别）
 │   ├── krkr2.json
 │   ├── yuris.json
 │   └── artemis.json
@@ -359,7 +379,8 @@ GalEngineKit/
 - [x] Phase 0: 项目骨架 + 引擎档案 schema
 - [x] Phase 1: 引擎档案库（KiriKiri2 / YU-RIS / Artemis）
 - [x] Phase 2: 通用钩子启动器（导入表注入 + 静态补丁 + 智能识别）
-- [ ] Phase 3: 真实引擎钩子 DLL（KiriKiri2 字体替换 → YU-RIS → 更多）
+- [x] Phase 3: KiriKiri2 字体钩子（注入 + `version.dll` 代理 + 字体克隆）
+- [ ] Phase 3.5: 其它引擎钩子（YU-RIS 起步）
 - [ ] Phase 4: GUI 版本 + 容器配置助手 + 一键部署
 
 ---

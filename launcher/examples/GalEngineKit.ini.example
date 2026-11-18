@@ -24,7 +24,12 @@ InjectMethod = auto
 TimeoutMs = 15000
 
 [Patch]
-; 静态字节补丁数量
+; 自动扫描补丁目录（1=开，默认开）
+; 只采用文件头带 @match 条件且指纹对得上的补丁；没有 @match 的补丁不会自动应用
+AutoScan = 1
+; 补丁目录，相对工作目录；不写默认 patches
+PatchDir = patches
+; 手动指定的补丁数量（与自动扫描的结果合并，同一文件只算一次）
 PatchCount = 0
 ; 补丁文件路径（每个补丁文件可包含多条规则）
 ; Patch_0_File = patches/remove_drm.bp
