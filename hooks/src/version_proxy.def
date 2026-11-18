@@ -1,0 +1,18 @@
+LIBRARY version.dll
+EXPORTS
+    GetFileVersionInfoA = gek_GetFileVersionInfoA
+    GetFileVersionInfoW = gek_GetFileVersionInfoW
+    GetFileVersionInfoSizeA = gek_GetFileVersionInfoSizeA
+    GetFileVersionInfoSizeW = gek_GetFileVersionInfoSizeW
+    GetFileVersionInfoExA = gek_GetFileVersionInfoExA
+    GetFileVersionInfoExW = gek_GetFileVersionInfoExW
+    GetFileVersionInfoSizeExA = gek_GetFileVersionInfoSizeExA
+    GetFileVersionInfoSizeExW = gek_GetFileVersionInfoSizeExW
+    VerFindFileA = gek_VerFindFileA
+    VerFindFileW = gek_VerFindFileW
+    VerInstallFileA = gek_VerInstallFileA
+    VerInstallFileW = gek_VerInstallFileW
+    VerLanguageNameA = gek_VerLanguageNameA
+    VerLanguageNameW = gek_VerLanguageNameW
+    VerQueryValueA = gek_VerQueryValueA
+    VerQueryValueW = gek_VerQueryValueW

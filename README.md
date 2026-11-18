@@ -107,6 +107,27 @@
 
 ## 高级用法
 
+### 代理形态（version.dll，免注入）
+
+除了启动器注入，还提供 `version.dll` 代理形态：把代理 `version.dll` 放进游戏目录即可，不需要启动器、不需要注入。很多 galgame（如 KiriKiri2）本就导入 `version.dll`，游戏启动时自然加载代理。代理把 version 导出转发回系统真实 `version.dll`（版本查询照常），同时装上与注入形态同一套字体钩子核心。
+
+```
+游戏目录/
+├── 游戏.exe
+└── version.dll   ← 代理，放这里
+```
+
+**原生 Windows**：放入游戏目录直接运行游戏即可。
+
+**Wine / Winlator（必须设 DLL 覆盖）**：Wine 对 `version.dll` 有硬编码的 builtin 加载顺序，不设 native 覆盖时内置 `version.dll` 会遮蔽代理导出，钩子不生效。两种设法：
+
+- 命令行：`WINEDLLOVERRIDES="version=n,b" wine 游戏.exe`
+- Winlator：容器设置 → DLL 覆盖 → 把 `version` 设为 `native`（或 `native,builtin`）
+
+代理在 DllMain 里装好钩子，游戏随后经 `GetProcAddress` 取字体 API 时被拦截。已在 Wine 下验证转发、日文字体替换与反向伪装。
+
+已知限制：未导出 undocumented 的 `GetFileVersionInfoByHandle`（按序号调用、游戏几乎不用）；个别游戏若确需再补。
+
 ### 配置文件
 
 当需要精细控制时，创建 `GalEngineKit.ini`：

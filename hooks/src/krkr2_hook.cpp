@@ -380,15 +380,26 @@ static void InstallHooks() {
     }
 }
 
-// ===== DLL 入口 =====
+// ===== 共享安装入口 =====
+// 两种交付形态都调用它：
+//   - 注入形态 krkr2_hook.dll（定义 GEK_KRKR2_STANDALONE，自带 DllMain）
+//   - 代理形态 version.dll（version_proxy.cpp 提供 DllMain，转发 version 导出）
+// 不含 DisableThreadLibraryCalls：由各形态自己的 DllMain 用自身模块句柄调用。
+extern "C" void Krkr2InstallHooks(void) {
+    InitializeCriticalSection(&g_fontRegLock);
+    g_fontRegLockReady = true;
+    LoadConfig();
+    InstallHooks();
+    HookLog(L"krkr2 钩子核心安装完成");
+}
+
+#ifdef GEK_KRKR2_STANDALONE
+
+// ===== DLL 入口（独立注入形态） =====
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID lpReserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(hModule);
-        InitializeCriticalSection(&g_fontRegLock);
-        g_fontRegLockReady = true;
-        LoadConfig();
-        InstallHooks();
-        HookLog(L"krkr2_hook 加载完成");
+        Krkr2InstallHooks();
     }
     return TRUE;
 }
@@ -422,3 +433,5 @@ extern "C" __declspec(dllexport)
 void GEK_HookShutdown(void) {
     HookLog(L"关闭钩子");
 }
+
+#endif // GEK_KRKR2_STANDALONE
