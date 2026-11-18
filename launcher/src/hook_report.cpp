@@ -54,8 +54,25 @@ bool HookReport::Analyze(const std::wstring& game_dir, std::wstring& out_summary
     bool installed = Contains(text, L"GetProcAddress 钩子安装成功");
     bool not_in_table = Contains(text, L"GetProcAddress 未在导入表中");
     bool api_missing = Contains(text, L"部分原始字体 API 解析失败");
-    int replaced = CountOccurrences(text, L"CreateFontIndirectW: '") +
-                   CountOccurrences(text, L"CreateFontW: '");
+    int lines = CountOccurrences(text, L"CreateFontIndirectW: '") +
+                CountOccurrences(text, L"CreateFontW: '");
+    // 钩子只在开头几次和每 50 次写一条，行数不等于实际次数，
+    // 有"累计 N 次"时以它为准
+    int replaced = lines;
+    {
+        size_t pos = 0;
+        while ((pos = text.find(L"累计 ", pos)) != std::wstring::npos) {
+            pos += 3;
+            int value = 0;
+            bool has = false;
+            while (pos < text.size() && text[pos] >= L'0' && text[pos] <= L'9') {
+                value = value * 10 + (int)(text[pos] - L'0');
+                has = true;
+                pos++;
+            }
+            if (has && value > replaced) replaced = value;
+        }
+    }
     int clone_ok = CountOccurrences(text, L"克隆字体已注册");
     int clone_fail = CountOccurrences(text, L"克隆失败");
     bool default_ini = Contains(text, L"未找到") && Contains(text, L"krkr2_font.ini");

@@ -104,6 +104,6 @@ bool CloneEnsure(const wchar_t* faceName) {
         HookLog(L"克隆字体已注册: '%s' <- %s", faceName, g_cfg.cloneSource);
         return true;
     }
-    HookLog(L"克隆失败: '%s'，源=%s（退回替换路径）", faceName, g_cfg.cloneSource);
+    HookLogWarn(L"克隆失败: '%s'，源=%s（退回替换路径）", faceName, g_cfg.cloneSource);
     return false;
 }

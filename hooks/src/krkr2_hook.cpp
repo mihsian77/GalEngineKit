@@ -49,6 +49,18 @@ static PFN_GetObjectW g_origGetObjectW = NULL;
 static PFN_DeleteObject g_origDeleteObject = NULL;
 static PFN_GetProcAddress g_origGetProcAddress = NULL;
 
+// 替换次数累计。逐条写会在正常游戏里刷出几千行，只在开头和每 50 次记一条
+static int g_replaceCount = 0;
+
+static void LogReplace(const wchar_t* api, const wchar_t* from, const wchar_t* to,
+                       int height, int weight, int charsetFrom, int charsetTo) {
+    g_replaceCount++;
+    if (g_replaceCount <= 5 || (g_replaceCount % 50) == 0) {
+        HookLog(L"%s: '%s' -> '%s' (h=%d weight=%d charset=%d->%d，累计 %d 次)",
+                api, from, to, height, weight, charsetFrom, charsetTo, g_replaceCount);
+    }
+}
+
 // ===== 钩子替换函数 =====
 static HFONT WINAPI HookCreateFontIndirectW(const LOGFONTW* lf) {
     if (g_cfg.enabled && lf && lf->lfFaceName[0] && IsJapaneseFont(lf->lfFaceName)) {
@@ -65,9 +77,8 @@ static HFONT WINAPI HookCreateFontIndirectW(const LOGFONTW* lf) {
         wcsncpy(newLf.lfFaceName, g_cfg.targetFont, LF_FACESIZE - 1);
         newLf.lfFaceName[LF_FACESIZE - 1] = L'\0';
         if (g_cfg.replaceCharset) newLf.lfCharSet = g_cfg.targetCharset;
-        HookLog(L"CreateFontIndirectW: '%s' -> '%s' (h=%d weight=%d charset=%d->%d)",
-                lf->lfFaceName, g_cfg.targetFont, lf->lfHeight, lf->lfWeight,
-                (int)lf->lfCharSet, (int)newLf.lfCharSet);
+        LogReplace(L"CreateFontIndirectW", lf->lfFaceName, g_cfg.targetFont,
+                   lf->lfHeight, lf->lfWeight, (int)lf->lfCharSet, (int)newLf.lfCharSet);
         HFONT h = g_origCreateFontIndirectW(&newLf);
         RegisterFont(h, &orig);
         return h;
@@ -111,8 +122,8 @@ static HFONT WINAPI HookCreateFontW(int cHeight, int cWidth, int cEscapement, in
         wcsncpy(orig.lfFaceName, pszFaceName, LF_FACESIZE - 1);
 
         DWORD cs = g_cfg.replaceCharset ? (DWORD)g_cfg.targetCharset : iCharSet;
-        HookLog(L"CreateFontW: '%s' -> '%s' (h=%d weight=%d charset=%d->%d)",
-                pszFaceName, g_cfg.targetFont, cHeight, cWeight, (int)iCharSet, (int)cs);
+        LogReplace(L"CreateFontW", pszFaceName, g_cfg.targetFont,
+                   cHeight, (int)cWeight, (int)iCharSet, (int)cs);
         HFONT h = g_origCreateFontW(cHeight, cWidth, cEscapement, cOrientation, cWeight,
                                     bItalic, bUnderline, bStrikeOut, cs, iOutPrecision,
                                     iClipPrecision, iQuality, iPitchAndFamily, g_cfg.targetFont);
@@ -194,7 +205,7 @@ static void InstallHooks() {
     // 1. 先获取全部原始 API 地址（GetProcAddress 钩子未装，不会递归）
     HMODULE gdi32 = LoadLibraryA("gdi32.dll");
     if (!gdi32) {
-        HookLog(L"错误: 无法加载 gdi32.dll");
+        HookLogError(L"加载 gdi32.dll 失败");
         return;
     }
     g_origCreateFontIndirectW = (PFN_CreateFontIndirectW)GetProcAddress(gdi32, "CreateFontIndirectW");
@@ -208,7 +219,7 @@ static void InstallHooks() {
 
     if (!g_origCreateFontIndirectW || !g_origGetTextFaceW ||
         !g_origGetObjectW || !g_origDeleteObject) {
-        HookLog(L"错误: 部分原始字体 API 解析失败，放弃安装");
+        HookLogError(L"字体 API 解析失败，钩子未安装");
         return;
     }
 
@@ -218,7 +229,7 @@ static void InstallHooks() {
     if (ok) {
         HookLog(L"GetProcAddress 钩子安装成功（创建 + 身份查询 + 删除）");
     } else {
-        HookLog(L"错误: kernel32 GetProcAddress 未在导入表中");
+        HookLogError(L"kernel32!GetProcAddress 不在导入表中，钩子未安装");
     }
 }
 
@@ -264,7 +275,7 @@ const GEK_HookInfo* GEK_HookGetInfo(void) {
 extern "C" __declspec(dllexport)
 int GEK_HookInitialize(const GEK_HookInitParams* params) {
     if (!params || params->size < sizeof(GEK_HookInitParams)) {
-        HookLog(L"初始化失败：参数无效");
+        HookLogError(L"初始化失败：参数无效");
         return 1;
     }
     HookLog(L"初始化: profile=%s", params->profile_name ? params->profile_name : L"(null)");

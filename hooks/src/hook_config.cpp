@@ -43,7 +43,7 @@ void HookConfigLoad() {
 
     DWORD attrs = GetFileAttributesW(iniPath);
     if (attrs == INVALID_FILE_ATTRIBUTES) {
-        HookLog(L"未找到 %s，使用默认配置", iniPath);
+        HookLogWarn(L"未找到 %s，使用默认配置", iniPath);
         return;
     }
 
