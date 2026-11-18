@@ -383,12 +383,15 @@ static bool PatchIat(const char* dllName, const char* funcName, void* newFunc, v
         const char* dll = (const char*)((BYTE*)hMod + desc->Name);
         if (_stricmp(dll, dllName) != 0) continue;
 
-        IMAGE_THUNK_DATA* thunkINT = desc->OriginalFirstThunk
-            ? (IMAGE_THUNK_DATA*)((BYTE*)hMod + desc->OriginalFirstThunk) : NULL;
+        // 没有 OriginalFirstThunk 时，IAT 里存的是已解析的函数地址而不是名字 RVA，
+        // 按 RVA 去读 IMAGE_IMPORT_BY_NAME 会踩到野指针。NLB/加壳 PE 常见，直接跳过。
+        if (!desc->OriginalFirstThunk) continue;
+
+        IMAGE_THUNK_DATA* thunkINT = (IMAGE_THUNK_DATA*)((BYTE*)hMod + desc->OriginalFirstThunk);
         IMAGE_THUNK_DATA* thunkIAT = (IMAGE_THUNK_DATA*)((BYTE*)hMod + desc->FirstThunk);
 
         for (size_t i = 0; ; i++) {
-            ULONG_PTR val = thunkINT ? thunkINT[i].u1.AddressOfData : thunkIAT[i].u1.AddressOfData;
+            ULONG_PTR val = thunkINT[i].u1.AddressOfData;
             if (val == 0) break;
             if (val & IMAGE_ORDINAL_FLAG) continue;  // 按序号导入，跳过
 

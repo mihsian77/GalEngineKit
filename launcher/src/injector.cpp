@@ -288,7 +288,18 @@ ResultCode DllInjector::InjectByRemoteThread(
     }
 
     // 等待线程结束
-    WaitForSingleObject(remote_thread, 15000);
+    DWORD wait_rc = WaitForSingleObject(remote_thread, 15000);
+    if (wait_rc != WAIT_OBJECT_0) {
+        // 超时或等待失败：线程可能还活着，此时 GetExitCodeThread 拿到的是
+        // STILL_ACTIVE(259)，当成成功会谎报。这里不释放 path_memory，
+        // 线程还在用它，宁可泄漏也不能 use-after-free。
+        if (wait_rc == WAIT_TIMEOUT)
+            GE_LOG_ERROR(L"注入线程 15 秒未返回，注入结果未知");
+        else
+            GE_LOG_ERROR(L"等待注入线程失败，错误码: " + std::to_wstring(GetLastError()));
+        CloseHandle(remote_thread);
+        return ResultCode::DllInjectFailed;
+    }
 
     // 检查线程退出码（即 LoadLibraryW 的返回值，非零表示成功）
     DWORD exit_code = 0;
