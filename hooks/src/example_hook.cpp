@@ -10,7 +10,7 @@
 static const GEK_HookInfo g_hookInfo = {
     GEK_HOOK_API_VERSION,      // api_version
     L"example_hook",            // name
-    L"0.1.0",                   // version
+    L"0.2.0",                   // version
     L"*",                       // target_engine（* 表示通用）
     L"示例钩子 DLL - 验证注入链路", // description
     0                           // flags

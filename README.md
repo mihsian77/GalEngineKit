@@ -1,13 +1,14 @@
 # GalEngineKit
 
-> **galgame 引擎适配与中文化工具箱** — 一个 exe，零配置，自动识别游戏引擎，注入钩子，搞定字体与汉化。
+> galgame 引擎适配工具。一个 exe 放游戏目录，自动认引擎、注入钩子、处理字体；
+> 出问题时用体检和日志回读告诉你卡在哪一步。
 
 
 ---
 
 ## 核心特性
 
-### 🎯 智能引擎识别 — 零配置
+### 引擎识别与自动配置
 
 把 `GalEngineKitLauncher.exe` 丢进游戏目录，双击运行。启动器自动：
 
@@ -19,7 +20,7 @@
 
 有 `GalEngineKit.ini` 时自动切换到配置模式，向后兼容。
 
-### 🪝 自研导入表注入 — 翻译环境友好
+### 导入表注入
 
 不依赖 Detours，独立实现导入表注入：
 
@@ -29,20 +30,20 @@
 4. 修改 PE 头导入表数据目录指向新内存
 5. 恢复主线程，Windows 加载器自动加载钩子 DLL
 
-**关键优势**：注入发生在进程执行前，纯内存写入，不触发 Box64/Box86 翻译缓存失效，对 Wine/Winlator 等动态翻译环境友好。
+注入发生在进程执行前，纯内存写入，不触发 Box64/Box86 翻译缓存失效，对 Wine/Winlator 等动态翻译环境友好。
 
-### 🔧 静态字节补丁 — 最可靠的修改方式
+### 静态字节补丁
 
 在进程恢复前修改内存中的指令字节，应用前比对原始字节防止版本不匹配。支持 `module:rva` 地址格式，适用于任何引擎。
 
-### 📦 单文件 exe — 拷贝即用
+### 单文件 exe
 
 - MinGW 静态链接（`-static -static-libgcc -static-libstdc++`）
 - 不依赖 VC++ 运行时、不依赖任何外部 DLL
 - 32 位 / 64 位双版本
 - 内嵌原创图标和版本信息
 
-### 🌍 全环境兼容
+### 环境兼容
 
 | 环境 | 状态 | 说明 |
 |---|---|---|
@@ -63,29 +64,58 @@
 
 从 [Releases](https://github.com/mihsian77/GalEngineKit/releases) 下载：
 
-- `GalEngineKitLauncher-32bit.exe` — 32 位游戏用（大多数 galgame）
-- `GalEngineKitLauncher-64bit.exe` — 64 位游戏用
-- `example_hook-32bit.dll` / `example_hook-64bit.dll` — 示例钩子，只往日志里写一行证明注入通了，不做字体替换
+- `GalEngineKitLauncher-32bit.exe` / `-64bit.exe` — 启动器，位数要和游戏一致
+- `krkr2_hook-32bit.dll` / `-64bit.dll` — KiriKiri2 字体钩子，注入形态
+- `version-32bit.dll` / `-64bit.dll` — 同一个钩子的代理形态，免启动器（放进游戏目录后改名 `version.dll`）
+- `example_hook-32bit.dll` / `-64bit.dll` — 示例钩子，只往日志写一行证明注入通了，不做字体替换
 
-`krkr2_hook.dll`（注入形态）和代理 `version.dll` 目前不在 Release 里，从 CI 产物或源码编译取。
+### 2. 先体检
 
-### 2. 使用（零配置）
+```
+GalEngineKitLauncher-32bit.exe --doctor
+```
+
+不启动游戏，只查一遍：程序位数和启动器是否对得上、认出来是什么引擎（附依据）、
+系统里有没有替换用的中文字体、补丁会不会命中、跑在 Wine 还是原生 Windows。
+结果打到屏幕并写进 `doctor.txt`。有问题先按 `[FAIL]` 项处理，别急着启动。
+
+### 3. 部署钩子（可选）
+
+```
+GalEngineKitLauncher-32bit.exe --deploy
+```
+
+把位数匹配的钩子 dll 复制到游戏目录，原有的同名文件先改名 `.gek-bak`，
+并把动作记进 `.galenginekit-manifest.txt`。想撤掉就 `--undeploy`，按记录还原。
+
+不想用启动器的话，直接把 `version-32bit.dll` 改名成 `version.dll` 放进游戏目录
+（代理形态，见下文）。
+
+### 4. 启动
 
 ```
 游戏目录/
 ├── 游戏.exe
 ├── GalEngineKitLauncher-32bit.exe   ← 放这里
-└── example_hook-32bit.dll            ← 可选，验证注入用
+└── krkr2_hook.dll                    ← --deploy 放进去的，或者手动放
 ```
 
 双击 `GalEngineKitLauncher-32bit.exe`，启动器自动识别引擎并运行游戏。
 
-### 3. 验证
+### 5. 看结果
 
-成功标志：
-- 游戏正常启动
-- 目录下生成 `galenginekit_hook.log`（钩子加载和替换记录都写这里；只跑示例钩子时只有加载记录）
-- `logs/` 目录下有启动器日志，包含引擎识别结果和环境信息
+启动器在游戏退出后会自动读一遍钩子日志，直接告诉你结论：
+
+```
+钩子结果: 钩子装上了，字体替换命中 12 次
+```
+
+也可以单独查：`GalEngineKitLauncher-32bit.exe --report`。没有日志时会明确说
+"钩子没加载过"或"LogToFile 关掉了"，不会含糊过去。
+
+- `galenginekit_hook.log` — 钩子的加载和替换记录
+- `logs/` — 启动器日志，含引擎识别结果和环境信息
+- `doctor.txt` — 体检报告
 
 ---
 
@@ -219,6 +249,10 @@ GalEngineKitLauncher.exe [选项] [配置文件]
   -l, --log-level <级别>  日志级别: error, warn, info, debug
   --no-wait               不等待目标进程退出
   --dry-run               仅校验配置，不启动进程
+  --doctor [目录]         体检：程序位数、引擎、字体、补丁、运行环境；写 doctor.txt
+  --deploy [目录]         部署钩子 dll，备份同名文件，记录到清单
+  --undeploy [目录]       按清单还原并删除清单
+  --report [目录]         读钩子日志给出结论
 ```
 
 ---
@@ -235,7 +269,7 @@ GalEngineKitLauncher.exe [选项] [配置文件]
 static const GEK_HookInfo g_info = {
     GEK_HOOK_API_VERSION,
     L"krkr2_font",          // 钩子名称
-    L"0.1.0",               // 版本
+    L"0.2.0",               // 版本
     L"KiriKiri2",           // 目标引擎
     L"KiriKiri2 字体替换钩子",
     0
