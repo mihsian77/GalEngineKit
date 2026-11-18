@@ -64,12 +64,18 @@
 
 从 [Releases](https://github.com/mihsian77/GalEngineKit/releases) 下载：
 
-- `GalEngineKitLauncher-32bit.exe` / `-64bit.exe` — 启动器，位数要和游戏一致
-- `krkr2_hook-32bit.dll` / `-64bit.dll` — KiriKiri2 字体钩子，注入形态
-- `version-32bit.dll` / `-64bit.dll` — 同一个钩子的代理形态，免启动器（放进游戏目录后改名 `version.dll`）
-- `example_hook-32bit.dll` / `-64bit.dll` — 示例钩子，只往日志写一行证明注入通了，不做字体替换
+- `GalEngineKit-v0.2.0-32bit.zip` — 32 位游戏用，老 galgame 大多是这种
+- `GalEngineKit-v0.2.0-64bit.zip` — 64 位游戏用
 
-### 2. 先体检
+每个包里是同一套、位数不同：启动器、字体钩子（注入形态）、字体钩子的代理形态
+（`version-*.dll`，改名 `version.dll` 用）、示例钩子、以及一份 `使用说明.txt`。
+不确定游戏是几位就随便下一个，跑 `--doctor` 会告诉你。
+
+### 2. 解压到游戏目录
+
+整个文件夹解压到游戏目录，和游戏 exe 放在一起。下面的命令都在游戏目录里执行。
+
+### 3. 先体检
 
 ```
 GalEngineKitLauncher-32bit.exe --doctor
@@ -79,7 +85,7 @@ GalEngineKitLauncher-32bit.exe --doctor
 系统里有没有替换用的中文字体、补丁会不会命中、跑在 Wine 还是原生 Windows。
 结果打到屏幕并写进 `doctor.txt`。有问题先按 `[FAIL]` 项处理，别急着启动。
 
-### 3. 部署钩子（可选）
+### 4. 部署钩子（可选）
 
 ```
 GalEngineKitLauncher-32bit.exe --deploy
@@ -91,7 +97,7 @@ GalEngineKitLauncher-32bit.exe --deploy
 不想用启动器的话，直接把 `version-32bit.dll` 改名成 `version.dll` 放进游戏目录
 （代理形态，见下文）。
 
-### 4. 启动
+### 5. 启动
 
 ```
 游戏目录/
@@ -102,7 +108,7 @@ GalEngineKitLauncher-32bit.exe --deploy
 
 双击 `GalEngineKitLauncher-32bit.exe`，启动器自动识别引擎并运行游戏。
 
-### 5. 看结果
+### 6. 看结果
 
 启动器在游戏退出后会自动读一遍钩子日志，直接告诉你结论：
 
