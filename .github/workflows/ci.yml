@@ -151,5 +151,7 @@ jobs:
         echo "== 字体克隆 exit=$RC2 =="; cat /tmp/t-clone.log
         set -e
 
-        [ $RC1 -eq 0 ] && grep -q "全部通过" /tmp/t-patch.log
-        [ $RC2 -eq 0 ] && grep -q "全部通过" /tmp/t-clone.log
+        if [ $RC1 -ne 0 ]; then echo "补丁库测试退出码 $RC1"; exit 1; fi
+        grep -q "全部通过" /tmp/t-patch.log
+        if [ $RC2 -ne 0 ]; then echo "字体克隆测试退出码 $RC2"; exit 1; fi
+        grep -q "全部通过" /tmp/t-clone.log

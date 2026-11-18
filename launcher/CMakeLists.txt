@@ -88,4 +88,7 @@ if(GEK_BUILD_TESTS)
         src/logger.cpp
     )
     target_link_libraries(test_patch_library PRIVATE user32)
+    if(MINGW)
+        target_link_options(test_patch_library PRIVATE -static -static-libgcc -static-libstdc++)
+    endif()
 endif()
